@@ -154,3 +154,8 @@ def test_release_attests_built_distributions():
     assert "attestations: write" in workflow
     assert "actions/attest-build-provenance@" in workflow
     assert "subject-path:" in workflow
+
+
+def test_live_gate_uses_protected_environment():
+    workflow = (ROOT / ".github" / "workflows" / "live-gate.yml").read_text()
+    assert "environment: live-gates" in workflow

@@ -46,6 +46,7 @@ jobs:
   live-gate:
     name: "live gate: ${{ inputs.profile }} ${{ inputs.task }}"
     runs-on: ubuntu-latest
+    environment: live-gates
     timeout-minutes: 30
 
     # Never run on forks — requires maintainer credentials
