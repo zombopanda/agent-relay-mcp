@@ -166,3 +166,8 @@ def test_install_smoke_uses_an_isolated_virtual_environment():
         workflow = (ROOT / ".github" / "workflows" / workflow_name).read_text()
         assert "uv pip install --system" not in workflow
         assert "/tmp/smoke-venv/bin/agent-relay-mcp doctor" in workflow
+
+
+def test_gitleaks_action_has_no_ignored_inputs():
+    workflow = (ROOT / ".github" / "workflows" / "security.yml").read_text()
+    assert "config-path:" not in workflow
