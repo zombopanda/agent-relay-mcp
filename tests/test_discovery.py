@@ -355,9 +355,7 @@ def test_opencode_nonverbose_fallback_prefers_qualified_default_when_not_first()
     runner = FakeDiscoveryProcess(
         [
             DiscoveryRun(1, "", "opencode: --verbose not supported"),  # --verbose fails
-            DiscoveryRun(
-                0, f"opencode/big-pickle\n{qualified_default}\n", ""
-            ),  # fallback succeeds
+            DiscoveryRun(0, f"opencode/big-pickle\n{qualified_default}\n", ""),  # fallback succeeds
         ]
     )
     adapter = OpencodeAdapter()
@@ -623,8 +621,12 @@ def test_profile_health_chatgpt_pro_returns_honest_unavailable(tmp_path: Path) -
     assert entry["discovery_available"] is False
 
 
-def test_profile_health_opencode_live_shape(tmp_path: Path) -> None:
+def test_profile_health_opencode_live_shape(tmp_path: Path, monkeypatch) -> None:
     """profile_health for opencode returns structured discovery data."""
+    monkeypatch.setattr(
+        "agent_relay_mcp.discovery._get_cli_version",
+        lambda _profile: "1.18.4",
+    )
     data = {
         "models": ["opencode-go/glm-5.2", "opencode-go/kimi-k2.7-code"],
         "default_model": "opencode-go/glm-5.2",

@@ -147,13 +147,17 @@ jobs:
           path: dist/
 
       - name: Install from wheel
-        run: uv pip install --system dist/*.whl
+        run: |
+          uv venv --python 3.13 /tmp/smoke-venv
+          uv pip install --python /tmp/smoke-venv/bin/python dist/*.whl
 
       - name: "Smoke: CLI help"
-        run: agent-relay-mcp doctor
+        run: /tmp/smoke-venv/bin/agent-relay-mcp doctor
 
       - name: "Smoke: import"
-        run: python -c "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
+        run: |
+          /tmp/smoke-venv/bin/python -c \
+            "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
 
   # ── npm pack + launcher smoke ───────────────────────────────────────────
   npm-smoke:

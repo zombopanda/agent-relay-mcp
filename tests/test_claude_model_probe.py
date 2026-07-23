@@ -656,7 +656,7 @@ REAL_211_PICKER = (
     "[Screen Reader Mode: on via flag]\n"
     "Claude Code v2.1.211\n"
     "Sonnet 5 with high effort · Claude Team\n"
-        "~/src/example-project/packages/agent-relay-mcp\n"
+    "~/src/example-project/packages/agent-relay-mcp\n"
     "warning: Safe mode...\n"
     "plan mode on...\n"
     "$you: /model\n"

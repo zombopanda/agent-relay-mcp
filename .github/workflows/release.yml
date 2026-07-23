@@ -73,9 +73,11 @@ jobs:
 
       - name: Install smoke
         run: |
-          uv pip install --system dist/*.whl
-          agent-relay-mcp doctor
-          python -c "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
+          uv venv --python 3.13 /tmp/smoke-venv
+          uv pip install --python /tmp/smoke-venv/bin/python dist/*.whl
+          /tmp/smoke-venv/bin/agent-relay-mcp doctor
+          /tmp/smoke-venv/bin/python -c \
+            "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
 
       - name: Attest distributions
         uses: actions/attest-build-provenance@v3

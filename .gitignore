@@ -1,0 +1,12 @@
+.DS_Store
+.agent-relay-mcp/
+.memsearch/
+.reasonix/
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.py[cod]
+*.tgz
+dist/
+uv.lock

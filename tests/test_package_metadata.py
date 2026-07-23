@@ -159,3 +159,10 @@ def test_release_attests_built_distributions():
 def test_live_gate_uses_protected_environment():
     workflow = (ROOT / ".github" / "workflows" / "live-gate.yml").read_text()
     assert "environment: live-gates" in workflow
+
+
+def test_install_smoke_uses_an_isolated_virtual_environment():
+    for workflow_name in ("ci.yml", "release.yml"):
+        workflow = (ROOT / ".github" / "workflows" / workflow_name).read_text()
+        assert "uv pip install --system" not in workflow
+        assert "/tmp/smoke-venv/bin/agent-relay-mcp doctor" in workflow

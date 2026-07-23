@@ -273,9 +273,7 @@ def test_claude_matrix_no_print_capability():
     modes = PROVIDER_SUPPORT_MATRIX["claude"].get("interaction_modes", [])
     assert "print" not in modes, "Claude must not claim print as an interaction mode"
     check_all = frozenset(modes)
-    assert "noninteractive" in check_all, (
-        "Claude must declare noninteractive interaction mode"
-    )
+    assert "noninteractive" in check_all, "Claude must declare noninteractive interaction mode"
 
 
 def test_reasonix_matrix_is_experimental():

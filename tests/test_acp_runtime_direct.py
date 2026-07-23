@@ -310,9 +310,7 @@ class TestRunAcpJobProtocolError:
 
         with patch(
             "agent_relay_mcp.acp_runtime.run_acp_prompt",
-            new=AsyncMock(
-                side_effect=AcpProtocolError("stream corrupted", stage="execution")
-            ),
+            new=AsyncMock(side_effect=AcpProtocolError("stream corrupted", stage="execution")),
         ):
             asyncio.run(
                 run_acp_job(
@@ -403,9 +401,7 @@ class TestSafeErrorRedaction:
 
         with patch(
             "agent_relay_mcp.acp_runtime.run_acp_prompt",
-            new=AsyncMock(
-                side_effect=Exception(f"config error: OPENAI_API_KEY={leaked}")
-            ),
+            new=AsyncMock(side_effect=Exception(f"config error: OPENAI_API_KEY={leaked}")),
         ):
             asyncio.run(
                 run_acp_job(

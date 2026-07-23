@@ -261,7 +261,9 @@ class TestProbeResult:
 
     def test_to_readiness_sanitizes_query_string_secret_in_evidence(self):
         """A query-string-shaped secret (api_key=...) must never survive into ReadinessResult."""
-        exc = RuntimeError("GET https://api.example.com/v1?api_key=sk-xxxx-super-secret&foo=bar failed")
+        exc = RuntimeError(
+            "GET https://api.example.com/v1?api_key=sk-xxxx-super-secret&foo=bar failed"
+        )
         pr = ProbeResult.from_exception("codex", exc)
         rr = pr.to_readiness("codex", "supported")
         assert "sk-xxxx-super-secret" not in (rr.evidence or "")

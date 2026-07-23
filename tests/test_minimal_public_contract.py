@@ -207,6 +207,10 @@ def test_agent_start_always_creates_async_job_and_returns_job_id(
         )
 
     monkeypatch.setattr(rmod, "probe_profile", fake_probe)
+    monkeypatch.setattr(
+        "agent_relay_mcp.acp_lifecycle.check_codex_acp_readiness",
+        lambda _runner: {"ready": True},
+    )
 
     result = server.agent_start(
         profile="codex",
@@ -246,6 +250,10 @@ def test_codex_agent_start_ask_falls_back_to_text(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(rmod, "probe_profile", fake_probe)
+    monkeypatch.setattr(
+        "agent_relay_mcp.acp_lifecycle.check_codex_acp_readiness",
+        lambda _runner: {"ready": True},
+    )
 
     result = server.agent_start(
         profile="codex",
