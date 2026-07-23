@@ -8,8 +8,6 @@ Expose to MCP clients with the server key `agents`.
 
 ## Demo
 
-![Codex invokes Claude, then Claude invokes Codex through Agent Relay MCP](demo/agent-relay-mcp-demo.gif)
-
 [Accessible transcript](demo/TRANSCRIPT.md) · [exact prompts](demo/PROMPTS.md) · [recording notes](demo/RECORDING.md)
 
 ## Ten-Minute Quickstart

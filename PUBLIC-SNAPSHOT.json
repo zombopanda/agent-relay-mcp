@@ -73,10 +73,6 @@
       "sha256": "51b2945db39e8328d826262ea882ae011f9936de13846b3610fd7c99ee16c8f3"
     },
     {
-      "path": "demo/agent-relay-mcp-demo.gif",
-      "sha256": "4e70d83c743744592f79a11b72b782093452b078ef4fa2442ccd91976f6ae4cd"
-    },
-    {
       "path": "demo/fixture/relay_demo.py",
       "sha256": "71140fe25aa463b0e404b094460b10a207baf0fca4a8019f586daa15d4632bc9"
     },
