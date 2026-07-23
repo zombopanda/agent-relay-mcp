@@ -1,0 +1,92 @@
+name: Live Provider Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Provider profile to test"
+        required: true
+        type: choice
+        options:
+          - codex
+          - claude
+          - opencode
+          - reasonix
+      model:
+        description: "Model ID (leave empty for profile default)"
+        required: false
+        type: string
+      effort:
+        description: "Effort level (supported by any provider that accepts effort)"
+        required: false
+        type: string
+      task:
+        description: "Task to test"
+        required: true
+        type: choice
+        options:
+          - ask
+          - review
+          - dev
+      interactive:
+        description: "Test interactive mode"
+        required: false
+        type: boolean
+        default: false
+      max_runtime_sec:
+        description: "Max runtime seconds"
+        required: false
+        type: string
+        default: "600"
+
+permissions:
+  contents: read
+
+jobs:
+  live-gate:
+    name: "live gate: ${{ inputs.profile }} ${{ inputs.task }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Never run on forks — requires maintainer credentials
+    if: github.repository == 'zombopanda/agent-relay-mcp'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Create isolated venv
+        run: uv venv --python 3.13 /tmp/ci-venv
+
+      - name: Install package + test deps
+        run: |
+          uv pip install --python /tmp/ci-venv/bin/python \
+            -e ".[test]"
+
+      - name: Provider surface gate
+        env:
+          PROFILE: ${{ inputs.profile }}
+          TASK: ${{ inputs.task }}
+          INTERACTIVE: ${{ inputs.interactive }}
+          MODEL: ${{ inputs.model }}
+          EFFORT: ${{ inputs.effort }}
+          MAX_RUNTIME_SEC: ${{ inputs.max_runtime_sec }}
+        run: |
+          MODEL_ARG=""
+          if [ -n "${MODEL}" ]; then
+            MODEL_ARG="--model ${MODEL}"
+          fi
+          EFFORT_ARG=""
+          if [ -n "${EFFORT}" ]; then
+            EFFORT_ARG="--effort ${EFFORT}"
+          fi
+          /tmp/ci-venv/bin/python scripts/provider_surface_gate.py \
+            --profile "${PROFILE}" \
+            ${MODEL_ARG} \
+            ${EFFORT_ARG} \
+            --task "${TASK}" \
+            --interactive "${INTERACTIVE}" \
+            --max-runtime-sec "${MAX_RUNTIME_SEC:-600}"

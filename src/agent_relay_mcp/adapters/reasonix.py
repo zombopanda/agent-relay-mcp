@@ -1,0 +1,20 @@
+"""Experimental Reasonix interactive CLI adapter."""
+
+from __future__ import annotations
+
+from ..profiles.reasonix import SUPPORT_TIER
+from .base import StaticAdapter
+
+
+class ReasonixAdapter(StaticAdapter):
+    def __init__(self) -> None:
+        super().__init__(
+            name="reasonix",
+            support_tier=SUPPORT_TIER,
+            backend="print",
+            supports_interactive=True,
+            effort_map={"low": "low", "medium": "medium", "high": "high", "max": "max"},
+        )
+
+
+adapter = ReasonixAdapter()

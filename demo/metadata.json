@@ -1,0 +1,13 @@
+{
+  "fixture_version": "v1",
+  "product_version": "0.1.3",
+  "asset": "agent-relay-mcp-demo.gif",
+  "duration_seconds_min": 30,
+  "duration_seconds_max": 45,
+  "real_provider_output_required": true,
+  "idle_acceleration_only": true,
+  "directions": [
+    "codex-to-claude",
+    "claude-to-codex"
+  ]
+}

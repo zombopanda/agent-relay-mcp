@@ -1,0 +1,91 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 8 * * 1"  # every Monday
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # ── Secret scanning ─────────────────────────────────────────────────────
+  secret-scan:
+    name: "secret scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
+
+  # ── Dependency audit ────────────────────────────────────────────────────
+  dependency-audit:
+    name: "dependency audit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Create isolated venv
+        run: uv venv --python 3.13 /tmp/ci-venv
+
+      - name: Install package + test deps
+        run: |
+          uv pip install --python /tmp/ci-venv/bin/python \
+            -e ".[test]"
+
+      - name: pip-audit
+        run: /tmp/ci-venv/bin/pip-audit
+
+  # ── CodeQL ──────────────────────────────────────────────────────────────
+  codeql:
+    name: "CodeQL"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python, javascript
+
+      - uses: github/codeql-action/analyze@v3
+
+  # ── Artifact allowlist check ────────────────────────────────────────────
+  artifact-audit:
+    name: "artifact audit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build artifacts
+        run: uv build --out-dir dist
+
+      - name: Audit wheel contents
+        run: |
+          echo "=== Wheel contents ==="
+          unzip -l dist/*.whl | grep -vE '\.pyc$|__pycache__'
+          echo ""
+          echo "=== Checking for prohibited paths ==="
+          ! unzip -l dist/*.whl | grep -qE '\.reasonix|\.memsearch|results/|benchmark|handoff|\.pytest_cache|\.DS_Store'
+
+      - name: Audit sdist contents
+        run: |
+          echo "=== Sdist contents ==="
+          tar -tzf dist/*.tar.gz | grep -vE '\.pyc$|__pycache__'
+          echo ""
+          echo "=== Checking for prohibited paths ==="
+          ! tar -tzf dist/*.tar.gz | grep -qE '\.reasonix|\.memsearch|results/|benchmark|handoff|\.pytest_cache|\.DS_Store'

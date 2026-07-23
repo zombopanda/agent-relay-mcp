@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Python test matrix (Ubuntu) ──────────────────────────────────────────
+  test-ubuntu:
+    name: "py${{ matrix.python }} on ubuntu"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Create isolated venv
+        run: uv venv --python ${{ matrix.python }} /tmp/ci-venv
+
+      - name: Install package + test deps
+        run: |
+          uv pip install --python /tmp/ci-venv/bin/python \
+            -e ".[test]"
+
+      - name: Run tests
+        run: |
+          /tmp/ci-venv/bin/python -m pytest tests/ -q \
+            --ignore=tests/test_claude_agent_integration.py \
+            --ignore=tests/test_acp_agent.py \
+            --ignore=tests/test_tmux_output.py \
+            --ignore=tests/test_local_e2e_dev_start.py
+
+  # ── Python test matrix (macOS primary version) ───────────────────────────
+  test-macos:
+    name: "py${{ matrix.python }} on macos"
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Create isolated venv
+        run: uv venv --python ${{ matrix.python }} /tmp/ci-venv
+
+      - name: Install package + test deps
+        run: |
+          uv pip install --python /tmp/ci-venv/bin/python \
+            -e ".[test]"
+
+      - name: Run tests
+        run: |
+          /tmp/ci-venv/bin/python -m pytest tests/ -q \
+            --ignore=tests/test_claude_agent_integration.py \
+            --ignore=tests/test_acp_agent.py \
+            --ignore=tests/test_tmux_output.py \
+            --ignore=tests/test_local_e2e_dev_start.py
+
+  # ── Lint & type checks ──────────────────────────────────────────────────
+  lint:
+    name: "lint + format check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Create isolated venv
+        run: uv venv --python 3.13 /tmp/ci-venv
+
+      - name: Install package + test deps
+        run: |
+          uv pip install --python /tmp/ci-venv/bin/python \
+            -e ".[test]"
+
+      - name: Ruff lint
+        run: |
+          /tmp/ci-venv/bin/ruff check \
+            src/agent_relay_mcp/ \
+            scripts/provider_surface_gate.py \
+            tests/test_minimal_public_contract.py \
+            tests/test_claude_adapter.py \
+            tests/test_provider_surface_gate.py
+
+      - name: Ruff format check
+        run: |
+          /tmp/ci-venv/bin/ruff format --check \
+            src/agent_relay_mcp/ \
+            scripts/provider_surface_gate.py \
+            tests/test_minimal_public_contract.py \
+            tests/test_claude_adapter.py \
+            tests/test_provider_surface_gate.py
+
+  # ── Build wheel + sdist ─────────────────────────────────────────────────
+  build:
+    name: "build wheel + sdist"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build
+        run: uv build --out-dir dist
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── Install smoke ───────────────────────────────────────────────────────
+  install-smoke:
+    name: "install smoke"
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install from wheel
+        run: uv pip install --system dist/*.whl
+
+      - name: "Smoke: CLI help"
+        run: agent-relay-mcp doctor
+
+      - name: "Smoke: import"
+        run: python -c "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
+
+  # ── npm pack + launcher smoke ───────────────────────────────────────────
+  npm-smoke:
+    name: "npm pack + launcher smoke"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: npm pack
+        run: npm pack
+
+      - name: Verify tarball contents
+        run: |
+          tar -tzf agent-relay-mcp-*.tgz | sort
+          # Must NOT contain Python source, pyproject, tests, or internal paths
+          ! tar -tzf agent-relay-mcp-*.tgz | grep -qE '\.py|pyproject\.toml|\.reasonix|\.memsearch|results/|\.pytest_cache|__pycache__|test'
+
+      - name: Launcher syntax check
+        run: node --check bin/agent-relay-mcp.mjs

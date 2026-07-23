@@ -1,0 +1,1004 @@
+"""Integration tests for agent_start(profile="claude") using adapter registry.
+
+These prove the public agent_start tool dispatches to the ClaudeAdapter
+and native claude_bg backend, not legacy providers.py/tmux/print paths.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from agent_relay_mcp.adapters.claude import (
+    RunResult,
+)
+from agent_relay_mcp.jobs import JobStore
+from agent_relay_mcp.server import agent_start, job_send, job_stop
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+class FakeRunner:
+    """Records calls and returns pre-configured results in order."""
+
+    def __init__(self, results: list[RunResult] | None = None) -> None:
+        self.results = list(results or [])
+        self.calls: list[dict[str, object]] = []
+
+    def run(self, args, *, timeout=None, cwd=None, env=None):
+        self.calls.append({"args": list(args), "timeout": timeout, "cwd": cwd, "env": env})
+        if not self.results:
+            raise AssertionError(f"Unexpected subprocess call: {args}")
+        return self.results.pop(0)
+
+
+def _auth_ok() -> RunResult:
+    return RunResult(
+        0,
+        json.dumps(
+            {
+                "loggedIn": True,
+                "authMethod": "claude.ai",
+                "apiProvider": "firstParty",
+                "subscriptionType": "max",
+            }
+        ),
+        "",
+    )
+
+
+def _launch_ok(session_id: str = "e2accc98") -> RunResult:
+    return RunResult(
+        0,
+        f"backgrounded · {session_id} · relay-test\n  claude attach {session_id}\n",
+        "",
+    )
+
+
+def _agents_entry(state: str, session_id: str = "e2accc98") -> RunResult:
+    return RunResult(
+        0,
+        json.dumps(
+            [
+                {
+                    "id": session_id,
+                    "sessionId": f"{session_id}-9fd6-4813-a6e6-3cb0d134de46",
+                    "state": state,
+                    "status": "idle" if state == "done" else "running",
+                    "waitingFor": "permission prompt" if state == "blocked" else None,
+                    "cwd": "/repo",
+                    "startedAt": 1784739414928,
+                }
+            ]
+        ),
+        "",
+    )
+
+
+def _logs_ok(output: str = "final output") -> RunResult:
+    return RunResult(0, output, "")
+
+
+def _cancel_ok() -> RunResult:
+    return RunResult(0, "stopped", "")
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def claude_state_root(tmp_path: Path, monkeypatch) -> Path:
+    """Redirect state and isolate the generic cached readiness preflight.
+
+    These tests exercise the Claude adapter's own auth probe with ``FakeRunner``.
+    They must not also depend on the developer machine's live Claude login.
+    """
+    state_root = tmp_path / "agent-harness-state"
+    state_root.mkdir()
+    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(state_root))
+    monkeypatch.setattr(
+        "agent_relay_mcp.readiness.probe_profile",
+        lambda *args, **kwargs: SimpleNamespace(
+            state="ready",
+            error_code=None,
+            remediation=None,
+        ),
+    )
+    return state_root
+
+
+@pytest.fixture
+def suppress_background_monitor(monkeypatch):
+    """Prevent agent_start from launching a background monitor thread.
+
+    Tests call monitor_agent_job manually to control timing.
+    """
+
+    def _noop(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.server.start_agent_job",
+        _noop,
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.agent_runner.start_agent_job",
+        _noop,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 1: agent_start(profile="claude") uses adapter registry, not legacy
+# ---------------------------------------------------------------------------
+
+
+def test_agent_start_claude_uses_adapter_not_legacy_providers(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Prove agent_start dispatches to the adapter and native claude_bg backend."""
+    runner = FakeRunner([_auth_ok(), _launch_ok("abc12345")])
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    # Prevent any legacy runner from launching real processes
+    monkeypatch.setattr(
+        "agent_relay_mcp.server.start_print_job",
+        lambda *a, **kw: pytest.fail("legacy start_print_job called"),
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.server.start_tmux_job",
+        lambda *a, **kw: pytest.fail("legacy start_tmux_job called"),
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.server.start_gui_job",
+        lambda *a, **kw: pytest.fail("legacy start_gui_job called"),
+    )
+
+    result = agent_start(
+        profile="claude",
+        prompt="hello world",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+
+    assert result.get("ok") is True, result
+    assert result.get("job_id"), "agent_start must return a durable job_id"
+    assert result.get("profile") == "claude"
+    # Must NOT use legacy transport annotation
+    assert result.get("transport") != "tmux", "must not use legacy tmux backend"
+    assert result.get("backend") == "claude_bg", "must use native claude_bg backend"
+
+    # Verify the adapter was called for readiness and launch
+    assert len(runner.calls) >= 2
+    readiness_call = runner.calls[0]["args"]
+    launch_call = runner.calls[1]["args"]
+    assert readiness_call[0:3] == ["claude", "auth", "status"]
+    assert launch_call[0:2] == ["claude", "--bg"]
+    assert "-p" not in launch_call
+    assert "bypassPermissions" not in launch_call
+    assert "--model" not in launch_call
+
+    # Verify job directory was created with proper metadata
+    store = JobStore(claude_state_root)
+    job = store.get_job(result["job_id"])
+    assert job is not None
+    meta = store._read_job_meta(job.path)
+    assert meta.get("backend") == "claude_bg"
+    assert meta.get("native_session_id") == "abc12345"
+
+
+# ---------------------------------------------------------------------------
+# Test 2: readiness failure creates no job directory
+# ---------------------------------------------------------------------------
+
+
+def test_readiness_failure_creates_no_job_directory(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Prove that auth/readiness failure returns error without creating a job dir."""
+    runner = FakeRunner(
+        [
+            RunResult(1, "", "not authenticated"),
+        ]
+    )
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    result = agent_start(
+        profile="claude",
+        prompt="hello",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+
+    assert result.get("ok") is False, result
+    assert result.get("error") is not None
+
+    # No job directory should exist
+    jobs_dir = claude_state_root / "jobs"
+    if jobs_dir.exists():
+        entries = list(jobs_dir.iterdir())
+        assert len(entries) == 0, f"Expected no job dirs, found {entries}"
+
+
+# ---------------------------------------------------------------------------
+# Test 3: launch stores native session metadata
+# ---------------------------------------------------------------------------
+
+
+def test_launch_stores_native_session_ids_and_resolved_settings(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Prove the job meta stores all resolved adapter fields."""
+    runner = FakeRunner([_auth_ok(), _launch_ok("deadbeef")])
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    result = agent_start(
+        profile="claude",
+        prompt="implement foo",
+        task="dev",
+        model="sonnet",
+        effort="high",
+        cwd="/tmp/test-repo",
+        interactive=False,
+        client_name="test",
+    )
+
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    job = store.get_job(job_id)
+    assert job is not None
+    meta = store._read_job_meta(job.path)
+
+    assert meta.get("native_session_id") == "deadbeef"
+    assert meta.get("backend") == "claude_bg"
+    assert meta.get("model") == "sonnet"
+    assert meta.get("effort") == "high"
+    assert meta.get("task") == "dev"
+    assert meta.get("interactive") is False
+    assert meta.get("cwd") == "/tmp/test-repo"
+
+
+# ---------------------------------------------------------------------------
+# Test 4: monitor finalizes terminal states via adapter
+# ---------------------------------------------------------------------------
+
+
+def test_monitor_polls_status_until_done_and_normalizes_result(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Prove the background monitor calls adapter.status/get_logs and finalizes."""
+    # Simulate: working → working → done
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("a1b2c3d4"),
+            # status poll 1: working
+            _agents_entry("working", "a1b2c3d4"),
+            # status poll 2: working
+            _agents_entry("working", "a1b2c3d4"),
+            # status poll 3: done
+            _agents_entry("done", "a1b2c3d4"),
+            # get_logs
+            _logs_ok("success output"),
+        ]
+    )
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+
+    # Run monitor manually (normally this runs in a background thread)
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    # Job should be finalized
+    final = store.get_result(job_id)
+    assert final.get("ok") is True, final
+    assert final.get("summary") == "success output"
+    meta = store._read_job_meta(store.get_job(job_id).path)
+    assert meta["native_full_session_id"] == "a1b2c3d4-9fd6-4813-a6e6-3cb0d134de46"
+
+
+def test_monitor_detects_blocked_as_failure_for_non_interactive_jobs(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Blocked non-interactive jobs produce structured failure, not generic timeout."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("deadb33f"),
+            # status: blocked
+            _agents_entry("blocked", "deadb33f"),
+            # get_logs
+            _logs_ok("needs approval"),
+        ]
+    )
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    # Non-interactive blocked → failure
+    assert final.get("ok") is False, (
+        f"Expected failure for blocked non-interactive job, got {final}"
+    )
+    assert final.get("summary") == "needs approval"
+
+
+# ---------------------------------------------------------------------------
+# Test 5: job_stop wires to adapter.cancel
+# ---------------------------------------------------------------------------
+
+
+def test_job_stop_calls_adapter_cancel_for_claude_bg_jobs(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """job_stop must call adapter.cancel for adapter-based Claude jobs."""
+    # Auth, launch, then cancel
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("cafebabe"),
+            # cancel call
+            _cancel_ok(),
+        ]
+    )
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    result = agent_start(
+        profile="claude",
+        prompt="long task",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    # Call job_stop — it should call adapter.cancel
+    stop_result = job_stop(
+        job_id=job_id,
+        reason="user_cancelled",
+        client_name="test",
+    )
+
+    assert stop_result.get("ok") is True, stop_result
+
+    # Verify cancel was called (runner.calls[2] should be claude stop)
+    cancel_calls = [c for c in runner.calls if c["args"][:2] == ["claude", "stop"]]
+    assert len(cancel_calls) >= 1, f"Expected claude stop call, got {runner.calls}"
+
+
+# ---------------------------------------------------------------------------
+# Test 6: interactive rejected before job creation
+# ---------------------------------------------------------------------------
+
+
+def test_agent_start_rejects_interactive_claude_before_attach_ready(
+    claude_state_root: Path, monkeypatch
+):
+    """Prove interactive=true is rejected with interactive_not_supported."""
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=True,
+        client_name="test",
+    )
+
+    assert result.get("ok") is False, result
+    assert "interactive_not_supported" in str(result.get("error", "")), (
+        f"Expected interactive_not_supported error, got {result}"
+    )
+
+
+def test_job_send_rejects_claude_bg_job(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """job_send must reject Claude bg jobs without a working attach path."""
+    runner = FakeRunner([_auth_ok(), _launch_ok("feedface")])
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+
+    assert result.get("ok") is True
+    job_id = result["job_id"]
+
+    # job_send should reject because Claude bg has no send path yet
+    send_result = job_send(
+        job_id=job_id,
+        text="more input",
+        client_name="test",
+    )
+
+    assert send_result.get("ok") is False
+    assert (
+        "not_available" in str(send_result.get("error", ""))
+        or "interactive" in str(send_result.get("error", "")).lower()
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 7: monitor result envelope — state mapping
+# ---------------------------------------------------------------------------
+
+
+def test_monitor_maps_done_to_completed_envelope(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Monitor must produce envelope with status=completed for done sessions."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("a1b2c3d4"),
+            _agents_entry("done", "a1b2c3d4"),
+            _logs_ok("success output"),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["ok"] is True
+    assert final["schema_version"] == "1"
+    assert final["status"] == "completed"
+    assert final["stop_reason"] == "done"
+    assert final["failure"] is None
+
+
+def test_monitor_maps_failed_to_failed_with_failure_block(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Monitor must produce envelope with status=failed + failure block."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("deadb33f"),
+            _agents_entry("failed", "deadb33f"),
+            _logs_ok("execution error"),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["ok"] is False
+    assert final["status"] == "failed"
+    assert final["stop_reason"] == "failed"
+    assert final["failure"] is not None
+    assert final["failure"]["stage"] == "execution"
+    assert final["failure"]["code"] == "native_failed"
+
+
+def test_monitor_maps_stopped_to_cancelled(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Monitor must produce envelope with status=cancelled for stopped sessions."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("cafebabe"),
+            _agents_entry("stopped", "cafebabe"),
+            _logs_ok("stopped by user"),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["status"] == "cancelled"
+    assert final["stop_reason"] == "stopped"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: blocked noninteractive → failed with structured failure
+# ---------------------------------------------------------------------------
+
+
+def test_monitor_blocked_noninteractive_produces_execution_failure(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Blocked noninteractive must produce status=failed, not generic failure."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("deadbeef"),
+            _agents_entry("blocked", "deadbeef"),
+            _logs_ok("needs approval"),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["ok"] is False
+    assert final["schema_version"] == "1"
+    assert final["status"] == "failed"
+    assert final["stop_reason"] == "blocked"
+    assert final["failure"] is not None
+    assert final["failure"]["stage"] == "execution"
+    assert final["failure"]["code"] == "blocked_noninteractive"
+    assert final["failure"]["retryable"] is False
+    assert final["failure"]["next_action"] is not None
+    assert final["summary"] == "needs approval"
+
+
+def test_monitor_claude_limit_is_actionable_and_never_returns_raw_tui(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """A Claude usage limit is not an interactive-consent block."""
+    raw_logs = (
+        "\x1b[2J\x1b[HClaude Code\n"
+        "\x1b[31mYou've hit your org's monthly spend limit\x1b[0m"
+        " · run /usage-credits to ask your admin for a higher limit\n"
+    )
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("deadbeef"),
+            _agents_entry("blocked", "deadbeef"),
+            _logs_ok(raw_logs),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    monitor_agent_job(
+        store,
+        result["job_id"],
+        reg.get_adapter("claude"),
+        poll_interval_sec=0.01,
+    )
+
+    final = store.get_result(result["job_id"])
+    assert final["ok"] is False
+    assert final["failure"]["code"] == "provider_limit_exhausted"
+    assert final["failure"]["retryable"] is True
+    assert final["failure"]["next_action"] == "check_provider_limits_or_retry_after_reset"
+    assert "usage limit" in final["summary"].lower()
+    assert "retry_with_interactive_mode" not in str(final)
+    assert "\x1b" not in str(final)
+    assert "/Users/" not in str(final["failure"]["diagnostics"])
+    assert len(final["summary"]) < 300
+
+
+def test_monitor_claude_missing_login_is_auth_failure(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("deadbeef"),
+            _agents_entry("blocked", "deadbeef"),
+            _logs_ok("\x1b[31mNot logged in · Please run /login\x1b[0m"),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    monitor_agent_job(
+        store,
+        result["job_id"],
+        reg.get_adapter("claude"),
+        poll_interval_sec=0.01,
+    )
+    final = store.get_result(result["job_id"])
+    assert final["failure"]["stage"] == "auth"
+    assert final["failure"]["code"] == "provider_needs_auth"
+    assert final["failure"]["retryable"] is False
+    assert final["failure"]["next_action"] == "authenticate_provider"
+    assert final["summary"] == "Claude is not authenticated. Start Claude and run /login."
+
+
+# ---------------------------------------------------------------------------
+# Test 9: runtime deadline failure
+# ---------------------------------------------------------------------------
+
+
+def test_monitor_runtime_deadline_produces_execution_failure_with_timeout_layer(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Runtime deadline exceeded must produce stage=execution code=max_runtime_exceeded."""
+    from agent_relay_mcp.agent_runner import _run_adapter_job
+
+    # Create job manually since server validation rejects max_runtime_sec=0
+    store = JobStore(claude_state_root)
+    job = store.create_job(
+        profile="claude",
+        operation="ask",
+        transport="claude_bg",
+        client_name="test",
+        cwd="/tmp/test",
+    )
+    store.update_job_meta(
+        job.job_id,
+        {
+            "backend": "claude_bg",
+            "native_session_id": "deadbeef",
+            "model": "sonnet",
+            "effort": "medium",
+            "task": "ask",
+            "interactive": False,
+            "cwd": "/tmp/test",
+            "adapter_name": "claude",
+            "profile": "claude",
+            "created": "2025-01-01T00:00:00Z",
+        },
+    )
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+
+    # Use max_runtime_sec=0 so deadline triggers immediately
+    _run_adapter_job(
+        store,
+        job.job_id,
+        adapter,
+        session_id="deadbeef",
+        poll_interval_sec=0.01,
+        max_runtime_sec=0,
+    )
+
+    final = store.get_result(job.job_id)
+    assert final["ok"] is False
+    assert final["status"] == "failed"
+    assert final["stop_reason"] == "max_runtime_exceeded"
+    assert final["failure"] is not None
+    assert final["failure"]["stage"] == "execution"
+    assert final["failure"]["code"] == "max_runtime_exceeded"
+    assert final["failure"]["retryable"] is True
+    assert final["failure"]["next_action"] == "retry_with_higher_timeout"
+    # Diagnostics must name the timeout layer
+    diag = final["failure"]["diagnostics"]
+    assert diag["layer"] == "timeout"
+    assert "max_runtime_sec" in diag
+    assert diag["max_runtime_sec"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Test 10: monitor/finalization exception failure
+# ---------------------------------------------------------------------------
+
+
+def test_monitor_finalization_exception_produces_finalization_failure(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Unhandled exception in monitor thread must produce stage=finalization code=monitor_failure."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("deadbeef"),
+            # First poll — blow up
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+
+    # Make adapter.status raise after the first call
+    original_status = (
+        __import__("agent_relay_mcp.adapters.claude", fromlist=["ClaudeAdapter"])
+        .ClaudeAdapter()
+        .status
+    )
+
+    call_count = [0]
+
+    def exploding_status(adapter_self, runner_arg, session_id):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise RuntimeError("monitor exploded")
+        return original_status(runner_arg, session_id)
+
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.ClaudeAdapter.status",
+        exploding_status,
+    )
+
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["ok"] is False
+    assert final["status"] == "failed"
+    assert final["stop_reason"] == "monitor_failure"
+    assert final["failure"] is not None
+    assert final["failure"]["stage"] == "finalization"
+    assert final["failure"]["code"] == "monitor_failure"
+    assert final["failure"]["retryable"] is False
+
+
+# ---------------------------------------------------------------------------
+# Test 11: full session ID persisted on every poll
+# ---------------------------------------------------------------------------
+
+
+def test_monitor_persists_full_session_id_on_every_poll_not_only_terminal(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Full native session ID must be persisted on every status poll, not just terminal."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("abc12345"),
+            # Poll 1: working, with full session_id
+            _agents_entry("working", "abc12345"),
+            # Poll 2: done
+            _agents_entry("done", "abc12345"),
+            _logs_ok("success"),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["schema_version"] == "1"
+    # Full session ID must be in the technical block
+    assert final["technical"]["native_full_session_id"] == "abc12345-9fd6-4813-a6e6-3cb0d134de46"
+    assert final["technical"]["native_session_id"] == "abc12345"
+
+
+# ---------------------------------------------------------------------------
+# Test 12: diagnostics bounded, no raw environment/secrets
+# ---------------------------------------------------------------------------
+
+
+def test_monitor_failure_diagnostics_bounded_and_no_secrets(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Failure diagnostics must be bounded to 2 KiB and stripped of env/secrets."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("deadbeef"),
+            _agents_entry("failed", "deadbeef"),
+            _logs_ok("x" * 5000),  # large output
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_relay_mcp.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    assert result.get("ok") is True, result
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_relay_mcp.adapters.registry as reg
+
+    adapter = reg.get_adapter("claude")
+    monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["failure"] is not None
+    diag = final["failure"]["diagnostics"]
+    # output in diagnostics must be bounded
+    output_diag = diag.get("output", "")
+    assert len(output_diag.encode("utf-8")) <= 2048
+    # No raw env or secret keys
+    flat = str(diag)
+    assert "SECRET" not in flat
+    assert "API_KEY" not in flat
+    assert "env" not in diag

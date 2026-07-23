@@ -1,0 +1,28 @@
+{
+  "name": "agent-relay-mcp",
+  "version": "0.1.3",
+  "description": "Agent Relay MCP — delegate review, advice, text, and dev work to local coding agents through MCP",
+  "bin": {
+    "agent-relay-mcp": "bin/agent-relay-mcp.mjs"
+  },
+  "files": [
+    "bin/agent-relay-mcp.mjs",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "demo/agent-relay-mcp-demo.gif",
+    "demo/TRANSCRIPT.md",
+    "demo/PROMPTS.md",
+    "demo/RECORDING.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zombopanda/agent-relay-mcp"
+  },
+  "keywords": ["mcp", "modelcontextprotocol", "agent", "relay", "review", "codex", "claude", "opencode"],
+  "license": "MIT",
+  "scripts": {
+    "smoke:live": "uv run python scripts/live_smoke.py",
+    "provider:gate": "uv run --extra test python scripts/provider_surface_gate.py"
+  }
+}

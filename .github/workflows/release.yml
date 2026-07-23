@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  # ── Build & audit ───────────────────────────────────────────────────────
+  build:
+    name: "build + audit"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify signed release tag
+        run: |
+          git config gpg.format ssh
+          git config gpg.ssh.allowedSignersFile \
+            "${GITHUB_WORKSPACE}/.github/allowed_signers"
+          git verify-tag "${GITHUB_REF_NAME}"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Verify tag matches package versions
+        shell: bash
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          python - "${release_version}" <<'PY'
+          import json
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          package_root = Path(".")
+          tag_version = sys.argv[1]
+          python_version = tomllib.loads(
+              (package_root / "pyproject.toml").read_text()
+          )["project"]["version"]
+          npm_version = json.loads(
+              (package_root / "package.json").read_text()
+          )["version"]
+          if not tag_version == python_version == npm_version:
+              raise SystemExit(
+                  "tag version does not match package versions: "
+                  f"tag={tag_version}, python={python_version}, npm={npm_version}"
+              )
+          PY
+
+      - name: Build
+        run: uv build --out-dir dist
+
+      - name: Audit wheel
+        run: |
+          ! unzip -l dist/*.whl | grep -qE '\.reasonix|\.memsearch|results/|benchmark|handoff'
+
+      - name: Audit sdist
+        run: |
+          ! tar -tzf dist/*.tar.gz | grep -qE '\.reasonix|\.memsearch|results/|benchmark|handoff'
+
+      - name: Install smoke
+        run: |
+          uv pip install --system dist/*.whl
+          agent-relay-mcp doctor
+          python -c "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
+
+      - name: Attest distributions
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── PyPI trusted publishing ─────────────────────────────────────────────
+  pypi-publish:
+    name: "publish to PyPI"
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/agent-relay-mcp
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+
+  # ── Smoke the artifact PyPI actually serves ────────────────────────────
+  pypi-smoke:
+    name: "smoke published PyPI artifact"
+    needs: pypi-publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install and start published version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for attempt in {1..12}; do
+            if uvx --refresh --from "agent-relay-mcp==${version}" agent-relay-mcp doctor; then
+              exit 0
+            fi
+            if [[ "${attempt}" -eq 12 ]]; then
+              echo "PyPI artifact was not installable after propagation window" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+  # ── npm publish (post-PyPI) ─────────────────────────────────────────────
+  npm-publish:
+    name: "publish to npm"
+    needs: pypi-smoke
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/agent-relay-mcp
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: false
+
+      - name: Update npm for trusted publishing
+        run: npm install --global npm@latest
+
+      - name: npm pack + verify
+        run: |
+          npm pack
+          ! tar -tzf agent-relay-mcp-*.tgz | grep -qE '\.reasonix|\.memsearch|results/|__pycache__'
+
+      - name: npm publish
+        run: npm publish --access public
