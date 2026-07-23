@@ -30,12 +30,12 @@ def _load_readme():
 def test_package_json_matches_pyproject_version():
     pkg = _load_package_json()
     py = _load_pyproject()
-    assert pkg["version"] == py["project"]["version"] == "0.1.3"
+    assert pkg["version"] == py["project"]["version"] == "0.2.0"
 
 
 def test_package_json_npm_name():
     pkg = _load_package_json()
-    assert pkg["name"] == "agent-relay-mcp"
+    assert pkg["name"] == "agent-crossbar"
 
 
 def test_npm_package_is_thin_launcher_only():
@@ -43,7 +43,7 @@ def test_npm_package_is_thin_launcher_only():
     pkg = _load_package_json()
     files = pkg["files"]
     # Must include launcher and docs
-    assert "bin/agent-relay-mcp.mjs" in files
+    assert "bin/agent-crossbar.mjs" in files
     assert "README.md" in files
     assert "LICENSE" in files
     # Must NOT include Python source or pyproject
@@ -68,7 +68,7 @@ def test_npm_scripts_restored():
 
 def test_pyproject_name():
     py = _load_pyproject()
-    assert py["project"]["name"] == "agent-relay-mcp"
+    assert py["project"]["name"] == "agent-crossbar"
 
 
 def test_sdist_excludes_nested_release_archives():
@@ -80,7 +80,7 @@ def test_sdist_excludes_nested_release_archives():
 def test_wheel_includes_deprecated_import_shim():
     py = _load_pyproject()
     packages = py["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
-    assert "src/agent_relay_mcp" in packages
+    assert "src/agent_crossbar" in packages
     assert "src/agent_harness_mcp" in packages
 
 
@@ -89,12 +89,12 @@ def test_wheel_includes_deprecated_import_shim():
 
 def test_package_readme_has_uvx_install():
     readme = _load_readme()
-    assert "uvx agent-relay-mcp" in readme
+    assert "uvx agent-crossbar" in readme
 
 
 def test_package_readme_has_uv_run():
     readme = _load_readme()
-    assert "uvx agent-relay-mcp" in readme  # primary install path
+    assert "uvx agent-crossbar" in readme  # primary install path
 
 
 # --- Public branding ---
@@ -122,9 +122,9 @@ def test_package_readme_no_private_registry_instructions():
 
 
 def test_ci_workflow_uses_public_package_name():
-    """CI workflows (when present) must reference agent-relay-mcp, not old names."""
+    """CI workflows (when present) must reference agent-crossbar, not old names."""
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
-    assert "agent-relay-mcp" in workflow
+    assert "agent-crossbar" in workflow
     assert "AGENT_HARNESS_RUN_LOCAL_E2E" not in workflow
 
 
@@ -146,7 +146,7 @@ def test_release_requires_signed_tag_and_post_pypi_smoke_before_npm():
     assert "tag version does not match package versions" in workflow
     assert "pypi-smoke:" in workflow
     assert "needs: pypi-smoke" in workflow
-    assert '"agent-relay-mcp==${version}"' in workflow
+    assert '"agent-crossbar==${version}"' in workflow
 
 
 def test_release_attests_built_distributions():
@@ -165,7 +165,7 @@ def test_install_smoke_uses_an_isolated_virtual_environment():
     for workflow_name in ("ci.yml", "release.yml"):
         workflow = (ROOT / ".github" / "workflows" / workflow_name).read_text()
         assert "uv pip install --system" not in workflow
-        assert "/tmp/smoke-venv/bin/agent-relay-mcp doctor" in workflow
+        assert "/tmp/smoke-venv/bin/agent-crossbar doctor" in workflow
 
 
 def test_gitleaks_action_has_no_ignored_inputs():

@@ -12,10 +12,10 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from agent_relay_mcp.adapters.base import LifecycleAdapter
-from agent_relay_mcp.adapters.claude import LocalSubprocessRunner
-from agent_relay_mcp.adapters.claude_model_probe import strip_ansi
-from agent_relay_mcp.envelope import build_result_envelope, sanitize_diagnostic_text
+from agent_crossbar.adapters.base import LifecycleAdapter
+from agent_crossbar.adapters.claude import LocalSubprocessRunner
+from agent_crossbar.adapters.claude_model_probe import strip_ansi
+from agent_crossbar.envelope import build_result_envelope, sanitize_diagnostic_text
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _PROVIDER_LIMIT_MARKERS = (

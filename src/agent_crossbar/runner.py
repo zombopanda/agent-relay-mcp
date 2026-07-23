@@ -16,17 +16,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from agent_relay_mcp.env_compat import getenv
-from agent_relay_mcp.jobs import JobStore
-from agent_relay_mcp.profiles import OPENCODE_DEFAULT_MODEL
-from agent_relay_mcp.providers import (
+from agent_crossbar.env_compat import getenv
+from agent_crossbar.jobs import JobStore
+from agent_crossbar.profiles import OPENCODE_DEFAULT_MODEL
+from agent_crossbar.providers import (
     _opencode_model_id,
     build_launch_plan,
     reasonix_dev_prompt,
     reasonix_shell_env,
     reasonix_shell_mcp_spec,
 )
-from agent_relay_mcp.tmux_output import (
+from agent_crossbar.tmux_output import (
     interactive_tmux_output_complete,
     interactive_tmux_output_summary,
     interactive_tmux_session_resumed,
@@ -79,8 +79,8 @@ def _candidate_home_dirs() -> list[Path]:
     """Return likely user homes for wrapper/config lookup."""
     homes: list[Path] = []
     for raw in (
-        getenv("AGENT_RELAY_PROVIDER_HOME"),
-        getenv("AGENT_RELAY_USER_HOME"),
+        getenv("AGENT_CROSSBAR_PROVIDER_HOME"),
+        getenv("AGENT_CROSSBAR_USER_HOME"),
         os.environ.get("REAL_HOME"),
         f"/Users/{os.environ.get('USER')}"
         if sys.platform == "darwin" and os.environ.get("USER")
@@ -140,7 +140,7 @@ class CuaDriverClient:
 
     def __init__(self, bin_path: str | None = None, call_timeout_sec: float | None = None):
         self.bin_path = bin_path or _wrapper_bin(
-            "AGENT_RELAY_CUA_DRIVER_BIN",
+            "AGENT_CROSSBAR_CUA_DRIVER_BIN",
             ".local/bin/cua-driver",
             "cua-driver",
         )
@@ -198,17 +198,17 @@ def _path_bin(env_name: str, fallback: str) -> str:
 
 
 def _state_root() -> Path:
-    env_dir = getenv("AGENT_RELAY_STATE_DIR")
+    env_dir = getenv("AGENT_CROSSBAR_STATE_DIR")
     if env_dir:
         return Path(env_dir)
-    return Path.home() / ".local" / "state" / "agent-relay-mcp"
+    return Path.home() / ".local" / "state" / "agent-crossbar"
 
 
 def _mise_trust_env() -> dict[str, str]:
     """Trust Bo's mise config when present without hardcoding it as required."""
     if os.environ.get("MISE_TRUSTED_CONFIG_PATHS"):
         return {}
-    configured = getenv("AGENT_RELAY_MISE_CONFIG")
+    configured = getenv("AGENT_CROSSBAR_MISE_CONFIG")
     candidates = [Path(configured).expanduser()] if configured else []
     candidates.extend(home / ".config" / "mise" / "config.toml" for home in _candidate_home_dirs())
     for candidate in candidates:

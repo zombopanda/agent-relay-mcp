@@ -20,13 +20,13 @@ You will receive an acknowledgment within 72 hours and a timeline for resolution
 
 ## Credential Safety
 
-Agent Relay MCP:
+Agent Crossbar:
 
 - **Never logs provider credentials.** Readiness probes extract only non-secret auth state.
 - **Binds provider stderr** in job results to 500 characters, stripping ANSI and known secret patterns.
 - **Does not include provider credentials** in fork PR CI workflows (read-only permissions, no secrets).
 
-If you believe credentials have leaked through Agent Relay MCP output:
+If you believe credentials have leaked through Agent Crossbar output:
 
 1. Rotate the affected credentials immediately.
 2. Report the leak path via the vulnerability process above.

@@ -1,4 +1,4 @@
-# Agent Relay MCP — Contributor Code Rules
+# Agent Crossbar — Contributor Code Rules
 
 These rules apply to code contributions. They are intentionally concise and focused on the public contract.
 
@@ -18,11 +18,11 @@ These rules apply to code contributions. They are intentionally concise and focu
 
 ## Architecture
 
-7. **Per-profile adapter modules.** Each provider gets one bounded module under `agent_relay_mcp/adapters/` implementing `ProviderAdapter` from `base.py`. Adapter modules MUST NOT import from each other.
+7. **Per-profile adapter modules.** Each provider gets one bounded module under `agent_crossbar/adapters/` implementing `ProviderAdapter` from `base.py`. Adapter modules MUST NOT import from each other.
 
 8. **Core modules are provider-agnostic.** `server.py`, `jobs.py`, `validation.py`, `envelope.py`, `readiness.py` MUST NOT contain provider-specific branching. Provider behavior is injected through adapter lookups.
 
-9. **Per-profile capabilities/models live in separate profile modules.** Each profile under `agent_relay_mcp/profiles/` owns its capabilities, models, and default configuration. Model lists MUST come from CLI discovery (`discovery.py`), not hardcoded. Profile modules MUST NOT import from each other.
+9. **Per-profile capabilities/models live in separate profile modules.** Each profile under `agent_crossbar/profiles/` owns its capabilities, models, and default configuration. Model lists MUST come from CLI discovery (`discovery.py`), not hardcoded. Profile modules MUST NOT import from each other.
 
 10. **No compatibility aliases for removed fields.** Removed fields (`transport`, `autonomy`, `sensitivity`, `sanitized_context_only`, `timeout_sec`, etc.) MUST NOT have runtime compatibility shims, aliases, or warning-based remapping. They are simply absent.
 

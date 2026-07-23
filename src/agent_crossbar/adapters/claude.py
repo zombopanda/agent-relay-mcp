@@ -290,7 +290,7 @@ def build_claude_launch(
 
 
 def normalize_claude_result(entry: dict[str, Any], logs: str) -> NormalizedResult:
-    from agent_relay_mcp.tmux_output import normalize_tmux_output
+    from agent_crossbar.tmux_output import normalize_tmux_output
 
     native_state = str(entry.get("state") or "")
     try:

@@ -4,14 +4,14 @@ from unittest.mock import patch
 
 import pytest
 
-from agent_relay_mcp.adapters.base import ModelCatalog, ModelInfo
-from agent_relay_mcp.models import Autonomy, Sensitivity, Transport
-from agent_relay_mcp.profiles import (
+from agent_crossbar.adapters.base import ModelCatalog, ModelInfo
+from agent_crossbar.models import Autonomy, Sensitivity, Transport
+from agent_crossbar.profiles import (
     allowed_models,
     list_profiles,
     resolve_profile,
 )
-from agent_relay_mcp.validation import validate_start_request
+from agent_crossbar.validation import validate_start_request
 
 
 def test_profiles_are_canonical_only():
@@ -161,7 +161,7 @@ def test_claude_profile_names_resolve_with_expected_model(tmp_path, profile, mod
 
 
 def test_codex_models_efforts_defaults_light_alias_and_xhigh(tmp_path):
-    from agent_relay_mcp.profiles import (
+    from agent_crossbar.profiles import (
         CODEX_DEFAULT_EFFORT,
         CODEX_DEFAULT_MODEL,
         CODEX_EFFORT_ALIASES,
@@ -244,7 +244,7 @@ def test_opencode_profile_exposes_all_opencode_go_models_and_defaults(tmp_path):
         ),
     )
 
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     with patch.object(_disc, "discover_profile_models", return_value=catalog):
         for operation, overrides in (

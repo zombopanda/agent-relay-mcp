@@ -1,11 +1,11 @@
-"""Contract tests for the Agent Relay MCP 0.1 public surface."""
+"""Contract tests for the Agent Crossbar 0.2 public surface."""
 
 from __future__ import annotations
 
 import inspect
 
-from agent_relay_mcp import server
-from agent_relay_mcp.profiles import list_profiles
+from agent_crossbar import server
+from agent_crossbar.profiles import list_profiles
 
 CLIENT_ARGS = {"client", "client_name", "client_version", "client_session_id"}
 
@@ -64,7 +64,7 @@ def test_qwen_is_not_a_public_profile() -> None:
 
 def test_all_review_targets_not_in_shipped_runtime() -> None:
     """ALL_REVIEW_TARGETS must not exist in the shipped profiles module."""
-    from agent_relay_mcp import profiles as pmod
+    from agent_crossbar import profiles as pmod
 
     assert not hasattr(pmod, "ALL_REVIEW_TARGETS"), (
         "ALL_REVIEW_TARGETS is legacy dead code and must not be in shipped runtime"
@@ -76,19 +76,19 @@ def test_minimal_agent_start_review_creates_job_without_target_fields(
     monkeypatch,
 ) -> None:
     """Review via agent_start works with just profile+prompt — no target fields."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     def fake_start_print_job(store, job_id, req, **kwargs):
         pass
 
     monkeypatch.setattr(server, "start_print_job", fake_start_print_job)
 
-    import agent_relay_mcp.readiness as rmod
+    import agent_crossbar.readiness as rmod
 
     def fake_probe(profile, _runner=None, use_cache=True):
         import time
 
-        from agent_relay_mcp.readiness import ReadinessResult
+        from agent_crossbar.readiness import ReadinessResult
 
         return ReadinessResult(
             profile=profile,
@@ -115,7 +115,7 @@ def test_minimal_agent_start_review_creates_job_without_target_fields(
 
 
 def test_agent_start_rejects_unknown_task_without_creating_job(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     result = server.agent_start(
         profile="codex",
@@ -130,7 +130,7 @@ def test_agent_start_rejects_unknown_task_without_creating_job(tmp_path, monkeyp
 
 
 def test_repo_scope_requires_cwd_without_creating_job(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     result = server.agent_start(
         profile="codex",
@@ -148,7 +148,7 @@ def test_repo_scope_requires_cwd_without_creating_job(tmp_path, monkeypatch) -> 
 def test_interactive_request_is_rejected_when_adapter_cannot_continue(
     tmp_path, monkeypatch
 ) -> None:
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     result = server.agent_start(
         profile="chatgpt_pro",
@@ -163,7 +163,7 @@ def test_interactive_request_is_rejected_when_adapter_cannot_continue(
 
 
 def test_max_runtime_is_validated_before_job_creation(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     result = server.agent_start(
         profile="codex",
@@ -182,7 +182,7 @@ def test_agent_start_always_creates_async_job_and_returns_job_id(
     monkeypatch,
 ) -> None:
     """Noninteractive agent_start must create a durable job, not run synchronously."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     def fake_start_print_job(store, job_id, req, **kwargs):
         pass  # just record, don't execute
@@ -190,12 +190,12 @@ def test_agent_start_always_creates_async_job_and_returns_job_id(
     monkeypatch.setattr(server, "start_print_job", fake_start_print_job)
 
     # Mock the readiness probe — real probe requires ACP bridge locally cached
-    import agent_relay_mcp.readiness as rmod
+    import agent_crossbar.readiness as rmod
 
     def fake_probe(profile, _runner=None, use_cache=True):
         import time
 
-        from agent_relay_mcp.readiness import ReadinessResult
+        from agent_crossbar.readiness import ReadinessResult
 
         return ReadinessResult(
             profile=profile,
@@ -208,7 +208,7 @@ def test_agent_start_always_creates_async_job_and_returns_job_id(
 
     monkeypatch.setattr(rmod, "probe_profile", fake_probe)
     monkeypatch.setattr(
-        "agent_relay_mcp.acp_lifecycle.check_codex_acp_readiness",
+        "agent_crossbar.acp_lifecycle.check_codex_acp_readiness",
         lambda _runner: {"ready": True},
     )
 
@@ -226,19 +226,19 @@ def test_agent_start_always_creates_async_job_and_returns_job_id(
 
 def test_codex_agent_start_ask_falls_back_to_text(tmp_path, monkeypatch):
     """Codex does not support advice, so task=ask must map to text."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     def fake_start_print_job(store, job_id, req, **kwargs):
         pass
 
     monkeypatch.setattr(server, "start_print_job", fake_start_print_job)
 
-    import agent_relay_mcp.readiness as rmod
+    import agent_crossbar.readiness as rmod
 
     def fake_probe(profile, _runner=None, use_cache=True):
         import time
 
-        from agent_relay_mcp.readiness import ReadinessResult
+        from agent_crossbar.readiness import ReadinessResult
 
         return ReadinessResult(
             profile=profile,
@@ -251,7 +251,7 @@ def test_codex_agent_start_ask_falls_back_to_text(tmp_path, monkeypatch):
 
     monkeypatch.setattr(rmod, "probe_profile", fake_probe)
     monkeypatch.setattr(
-        "agent_relay_mcp.acp_lifecycle.check_codex_acp_readiness",
+        "agent_crossbar.acp_lifecycle.check_codex_acp_readiness",
         lambda _runner: {"ready": True},
     )
 
@@ -269,19 +269,19 @@ def test_codex_agent_start_ask_falls_back_to_text(tmp_path, monkeypatch):
 
 def test_reasonix_interactive_true_selects_tmux_transport(tmp_path, monkeypatch):
     """Reasonix interactive=true must route to tmux, not print."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     def fake_start_tmux_job(store, job_id, req, **kwargs):
         pass
 
     monkeypatch.setattr(server, "start_tmux_job", fake_start_tmux_job)
 
-    import agent_relay_mcp.readiness as rmod
+    import agent_crossbar.readiness as rmod
 
     def fake_probe(profile, _runner=None, use_cache=True):
         import time
 
-        from agent_relay_mcp.readiness import ReadinessResult
+        from agent_crossbar.readiness import ReadinessResult
 
         return ReadinessResult(
             profile=profile,
@@ -307,7 +307,7 @@ def test_reasonix_interactive_true_selects_tmux_transport(tmp_path, monkeypatch)
 
 def test_claude_interactive_true_rejected_with_billing_guidance(tmp_path, monkeypatch):
     """Claude interactive=True must be rejected with clear separate-credit/metered billing guidance."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     result = server.agent_start(
         profile="claude",
@@ -336,14 +336,14 @@ def test_claude_interactive_true_rejected_with_billing_guidance(tmp_path, monkey
 
 def test_claude_agent_start_uses_claude_bg_backend(tmp_path, monkeypatch):
     """Claude agent_start response must report backend='claude_bg', not 'print'."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
-    import agent_relay_mcp.readiness as rmod
+    import agent_crossbar.readiness as rmod
 
     def fake_probe(profile, _runner=None, use_cache=True):
         import time
 
-        from agent_relay_mcp.readiness import ReadinessResult
+        from agent_crossbar.readiness import ReadinessResult
 
         return ReadinessResult(
             profile=profile,
@@ -358,17 +358,17 @@ def test_claude_agent_start_uses_claude_bg_backend(tmp_path, monkeypatch):
     # Also need to fake the adapter readiness (Claude uses a different path)
 
     def fake_adapter_readiness(_self, runner):
-        from agent_relay_mcp.adapters.claude import ReadinessResult as AdapterRR
+        from agent_crossbar.adapters.claude import ReadinessResult as AdapterRR
 
         return AdapterRR(state="ready", authenticated=True)
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.ClaudeAdapter.check_readiness",
+        "agent_crossbar.adapters.claude.ClaudeAdapter.check_readiness",
         fake_adapter_readiness,
     )
 
     def fake_launch(_self, runner, **kwargs):
-        from agent_relay_mcp.adapters.claude import LaunchResult
+        from agent_crossbar.adapters.claude import LaunchResult
 
         return LaunchResult(
             session_id="abc12345",
@@ -378,7 +378,7 @@ def test_claude_agent_start_uses_claude_bg_backend(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.ClaudeAdapter.launch",
+        "agent_crossbar.adapters.claude.ClaudeAdapter.launch",
         fake_launch,
     )
 
@@ -397,7 +397,7 @@ def test_claude_agent_start_uses_claude_bg_backend(tmp_path, monkeypatch):
 
 def test_reasonix_interactive_false_selects_print_transport(tmp_path, monkeypatch):
     """Reasonix interactive=false must use print, not tmux."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     captured = {}
 
@@ -406,12 +406,12 @@ def test_reasonix_interactive_false_selects_print_transport(tmp_path, monkeypatc
 
     monkeypatch.setattr(server, "start_print_job", fake_start_print_job)
 
-    import agent_relay_mcp.readiness as rmod
+    import agent_crossbar.readiness as rmod
 
     def fake_probe(profile, _runner=None, use_cache=True):
         import time
 
-        from agent_relay_mcp.readiness import ReadinessResult
+        from agent_crossbar.readiness import ReadinessResult
 
         return ReadinessResult(
             profile=profile,
@@ -454,7 +454,7 @@ LEGACY_FIELDS = frozenset(
 
 def test_profiles_list_has_no_budget_or_legacy_fields():
     """profiles_list must not expose budget, cloud_backed, or legacy metadata."""
-    from agent_relay_mcp.profiles import profile_registry
+    from agent_crossbar.profiles import profile_registry
 
     reg = profile_registry()
     for name, entry in reg.items():
@@ -464,7 +464,7 @@ def test_profiles_list_has_no_budget_or_legacy_fields():
 
 def test_profiles_list_has_minimal_schema_per_entry():
     """Each profile entry must have only: aliases, models, default_model, operations, interactive."""
-    from agent_relay_mcp.profiles import profile_registry
+    from agent_crossbar.profiles import profile_registry
 
     allowed = {"aliases", "models", "default_model", "operations", "interactive", "support_tier"}
     reg = profile_registry()
@@ -475,7 +475,7 @@ def test_profiles_list_has_minimal_schema_per_entry():
 
 def test_profiles_list_interactive_is_boolean():
     """interactive must be a boolean, not a transport list."""
-    from agent_relay_mcp.profiles import profile_registry
+    from agent_crossbar.profiles import profile_registry
 
     reg = profile_registry()
     for name, entry in reg.items():
@@ -485,7 +485,7 @@ def test_profiles_list_interactive_is_boolean():
 
 def test_profiles_list_operations_are_string_lists():
     """operations must be a list of strings, not capability dicts."""
-    from agent_relay_mcp.profiles import profile_registry
+    from agent_crossbar.profiles import profile_registry
 
     reg = profile_registry()
     for name, entry in reg.items():
@@ -497,7 +497,7 @@ def test_profiles_list_operations_are_string_lists():
 
 def test_profiles_list_has_no_transports_in_entries():
     """No transports key anywhere in the registry."""
-    from agent_relay_mcp.profiles import profile_registry
+    from agent_crossbar.profiles import profile_registry
 
     reg = profile_registry()
     for name, entry in reg.items():
@@ -506,7 +506,7 @@ def test_profiles_list_has_no_transports_in_entries():
 
 def test_capability_for_and_blocked_operations_are_removed():
     """capability_for and blocked_operations must not exist."""
-    import agent_relay_mcp.profiles as pm
+    import agent_crossbar.profiles as pm
 
     assert not hasattr(pm, "capability_for"), "capability_for must be removed"
     assert not hasattr(pm, "blocked_operations"), "blocked_operations must be removed"
@@ -517,7 +517,7 @@ def test_capability_for_and_blocked_operations_are_removed():
 
 def test_profile_operations_and_interactive_helpers_exist():
     """New minimal helpers must exist."""
-    import agent_relay_mcp.profiles as pm
+    import agent_crossbar.profiles as pm
 
     assert hasattr(pm, "profile_operations"), "profile_operations missing"
     assert hasattr(pm, "profile_interactive"), "profile_interactive missing"

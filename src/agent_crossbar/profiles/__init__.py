@@ -1,6 +1,6 @@
 """Canonical profile registry — one module per provider.
 
-Each profile lives in its own bounded module under ``agent_relay_mcp.profiles.*``.
+Each profile lives in its own bounded module under ``agent_crossbar.profiles.*``.
 This package aggregates them into a single registry with a minimal, provider-neutral
 public API.
 """
@@ -10,8 +10,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from agent_relay_mcp.models import CANONICAL_PROFILES, PROFILE_ALIASES
-from agent_relay_mcp.profiles import chatgpt_pro, claude, codex, opencode, reasonix
+from agent_crossbar.models import CANONICAL_PROFILES, PROFILE_ALIASES
+from agent_crossbar.profiles import chatgpt_pro, claude, codex, opencode, reasonix
 
 # Per-profile constants (re-exported for backward compatibility)
 REASONIX_MODELS = reasonix.REASONIX_MODELS

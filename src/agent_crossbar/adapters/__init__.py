@@ -1,4 +1,4 @@
-"""Provider adapters for Agent Relay MCP."""
+"""Provider adapters for Agent Crossbar."""
 
 from .registry import ADAPTERS, get_adapter
 

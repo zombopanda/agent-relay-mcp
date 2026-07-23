@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import inspect
 
-from agent_relay_mcp import server
-from agent_relay_mcp.profiles import profile_registry
+from agent_crossbar import server
+from agent_crossbar.profiles import profile_registry
 
 CLIENT_ARGS = {"client", "client_name", "client_version", "client_session_id"}
 
@@ -47,7 +47,7 @@ def test_public_tool_signatures_match_audited_argument_surface():
 
 def test_agent_start_preserves_cwd_and_effort(tmp_path, monkeypatch):
     """agent_start cwd/effort reach the backend; explicit effort routes via print."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     captured: dict[str, dict] = {}
 
     def fake_start_print_job(store, job_id, req, **kwargs):
@@ -56,12 +56,12 @@ def test_agent_start_preserves_cwd_and_effort(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "start_print_job", fake_start_print_job)
 
     # Mock the readiness probe for all profiles
-    import agent_relay_mcp.readiness as rmod
+    import agent_crossbar.readiness as rmod
 
     def fake_probe(profile, _runner=None, use_cache=True):
         import time
 
-        from agent_relay_mcp.readiness import ReadinessResult
+        from agent_crossbar.readiness import ReadinessResult
 
         return ReadinessResult(
             profile=profile,

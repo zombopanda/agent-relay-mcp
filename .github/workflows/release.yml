@@ -77,9 +77,9 @@ jobs:
         run: |
           uv venv --python 3.13 /tmp/smoke-venv
           uv pip install --python /tmp/smoke-venv/bin/python dist/*.whl
-          /tmp/smoke-venv/bin/agent-relay-mcp doctor
+          /tmp/smoke-venv/bin/agent-crossbar doctor
           /tmp/smoke-venv/bin/python -c \
-            "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
+            "import agent_crossbar; print(agent_crossbar.__version__)"
 
       - name: Attest distributions
         uses: actions/attest-build-provenance@v3
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/agent-relay-mcp
+      url: https://pypi.org/p/agent-crossbar
     permissions:
       id-token: write
     steps:
@@ -124,7 +124,7 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           for attempt in {1..12}; do
-            if uvx --refresh --from "agent-relay-mcp==${version}" agent-relay-mcp doctor; then
+            if uvx --refresh --from "agent-crossbar==${version}" agent-crossbar doctor; then
               exit 0
             fi
             if [[ "${attempt}" -eq 12 ]]; then
@@ -141,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: npm
-      url: https://www.npmjs.com/package/agent-relay-mcp
+      url: https://www.npmjs.com/package/agent-crossbar
     permissions:
       contents: read
       id-token: write
@@ -162,14 +162,14 @@ jobs:
       - name: npm pack + verify
         run: |
           npm pack
-          ! tar -tzf agent-relay-mcp-*.tgz | grep -qE '\.reasonix|\.memsearch|results/|__pycache__'
+          ! tar -tzf agent-crossbar-*.tgz | grep -qE '\.reasonix|\.memsearch|results/|__pycache__'
 
       - name: npm publish
         shell: bash
         run: |
           version="$(node -p 'require("./package.json").version')"
-          if npm view "agent-relay-mcp@${version}" version >/dev/null 2>&1; then
-            echo "agent-relay-mcp@${version} is already published; skipping"
+          if npm view "agent-crossbar@${version}" version >/dev/null 2>&1; then
+            echo "agent-crossbar@${version} is already published; skipping"
             exit 0
           fi
           npm publish --access public
@@ -195,6 +195,6 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --verify-tag \
-            --title "Agent Relay MCP ${GITHUB_REF_NAME}" \
-            --notes-file "docs/releases/v0.1.3.md" \
+            --title "Agent Crossbar ${GITHUB_REF_NAME}" \
+            --notes-file "docs/releases/v0.2.0.md" \
             dist/*

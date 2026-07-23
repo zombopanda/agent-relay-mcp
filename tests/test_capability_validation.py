@@ -2,8 +2,8 @@
 
 import pytest
 
-from agent_relay_mcp.server import profiles_list
-from agent_relay_mcp.validation import validate_start_request
+from agent_crossbar.server import profiles_list
+from agent_crossbar.validation import validate_start_request
 
 
 @pytest.fixture(autouse=True)
@@ -14,7 +14,7 @@ def _no_real_provider_execution(monkeypatch):
         return store.set_result(job_id, True, summary="PROVIDER_OK\n")
 
     monkeypatch.setattr(
-        "agent_relay_mcp.server.start_print_job",
+        "agent_crossbar.server.start_print_job",
         fake_start_print_job,
     )
 
@@ -28,10 +28,10 @@ def _no_live_model_discovery(tmp_path, monkeypatch):
     exercise validation logic against the static registry, not whatever
     codex/opencode/claude happen to be installed on the test machine.
     """
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     monkeypatch.delenv("AGENT_HARNESS_STATE_DIR", raising=False)
 
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     def _boom(state_root, profile, *, refresh=False):
         raise RuntimeError(f"no live {profile} probe in unit tests")
@@ -204,7 +204,7 @@ def test_claude_profile_entry_support_tier(tmp_path):
 
 def test_provider_support_matrix_exists():
     """PROVIDER_SUPPORT_MATRIX must be defined and cover all canonical profiles."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX, list_profiles
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX, list_profiles
 
     assert isinstance(PROVIDER_SUPPORT_MATRIX, dict)
     assert set(PROVIDER_SUPPORT_MATRIX.keys()) == set(list_profiles()), (
@@ -227,7 +227,7 @@ _REQUIRED_MATRIX_FIELDS = frozenset(
 
 def test_provider_support_matrix_has_required_fields():
     """Every matrix entry must have all required fields."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     for provider, entry in PROVIDER_SUPPORT_MATRIX.items():
         missing = _REQUIRED_MATRIX_FIELDS - set(entry.keys())
@@ -241,7 +241,7 @@ def test_provider_support_matrix_has_required_fields():
 
 def test_claude_matrix_reports_claude_bg_backend():
     """Claude matrix must truthfully report claude_bg backend and no print/tmux."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     claude = PROVIDER_SUPPORT_MATRIX["claude"]
     assert "backend" in claude, "claude matrix must declare backend"
@@ -259,7 +259,7 @@ def test_claude_matrix_reports_claude_bg_backend():
 
 def test_claude_matrix_job_send_not_supported():
     """Claude claude_bg backend must report job_send_supported=False."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     assert PROVIDER_SUPPORT_MATRIX["claude"].get("job_send_supported") is False, (
         "Claude claude_bg must declare job_send_supported=False"
@@ -268,7 +268,7 @@ def test_claude_matrix_job_send_not_supported():
 
 def test_claude_matrix_no_print_capability():
     """Claude matrix must not include 'print' in interaction_modes."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     modes = PROVIDER_SUPPORT_MATRIX["claude"].get("interaction_modes", [])
     assert "print" not in modes, "Claude must not claim print as an interaction mode"
@@ -278,14 +278,14 @@ def test_claude_matrix_no_print_capability():
 
 def test_reasonix_matrix_is_experimental():
     """Reasonix matrix must declare experimental support_tier."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     assert PROVIDER_SUPPORT_MATRIX["reasonix"]["support_tier"] == "experimental"
 
 
 def test_chatgpt_pro_matrix_is_macos_only():
     """ChatGPT Pro matrix must declare darwin-only OS support."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     assert "darwin" in PROVIDER_SUPPORT_MATRIX["chatgpt_pro"]["os"]
     assert "linux" not in PROVIDER_SUPPORT_MATRIX["chatgpt_pro"]["os"]
@@ -295,7 +295,7 @@ def test_chatgpt_pro_matrix_is_macos_only():
 def test_matrix_entries_owned_by_provider_modules():
     """profiles/__init__.py must assemble the matrix from each provider's own
     build_matrix_entry(), not hardcode a duplicated central matrix."""
-    from agent_relay_mcp.profiles import (
+    from agent_crossbar.profiles import (
         PROVIDER_SUPPORT_MATRIX,
         chatgpt_pro,
         claude,
@@ -317,7 +317,7 @@ def test_matrix_entries_owned_by_provider_modules():
 def test_matrix_interaction_modes_are_provider_neutral():
     """interaction_modes must only ever contain provider-neutral labels, never
     a raw transport/backend name (print, tmux, acp, claude_bg, gui)."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     allowed = {"noninteractive", "interactive"}
     transport_labels = {"print", "tmux", "acp", "claude_bg", "gui"}
@@ -331,7 +331,7 @@ def test_matrix_interaction_modes_are_provider_neutral():
 
 def test_matrix_backend_field_matches_provider_transport():
     """The internal (non-public) matrix backend field must reflect the real transport."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     expected_backends = {
         "claude": "claude_bg",
@@ -346,7 +346,7 @@ def test_matrix_backend_field_matches_provider_transport():
 
 def test_matrix_uses_billing_mode_not_billing():
     """billing_mode is the one stable field name; a bare 'billing' key must never appear."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     for provider, entry in PROVIDER_SUPPORT_MATRIX.items():
         assert "billing" not in entry, f"{provider} matrix must use billing_mode, not billing"
@@ -355,7 +355,7 @@ def test_matrix_uses_billing_mode_not_billing():
 
 def test_reasonix_matrix_supports_both_interaction_modes():
     """Reasonix truthfully supports both noninteractive (print) and interactive (tmux)."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     entry = PROVIDER_SUPPORT_MATRIX["reasonix"]
     assert set(entry["interaction_modes"]) == {"noninteractive", "interactive"}
@@ -364,7 +364,7 @@ def test_reasonix_matrix_supports_both_interaction_modes():
 
 def test_noninteractive_only_profiles_do_not_support_job_send():
     """Claude, Codex, OpenCode, and ChatGPT Pro are single-shot: noninteractive only."""
-    from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
     for provider in ("claude", "codex", "opencode", "chatgpt_pro"):
         entry = PROVIDER_SUPPORT_MATRIX[provider]
@@ -374,7 +374,7 @@ def test_noninteractive_only_profiles_do_not_support_job_send():
 
 def test_profiles_list_has_no_legacy_fields(tmp_path, monkeypatch):
     """profiles_list must not expose budget, cloud_backed, capabilities, or transports."""
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     result = profiles_list(client_name="codex")
     assert result["ok"] is True
     legacy = {

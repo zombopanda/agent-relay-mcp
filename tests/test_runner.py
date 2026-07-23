@@ -11,9 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_relay_mcp import runner as runner_module
-from agent_relay_mcp.jobs import JobStore
-from agent_relay_mcp.runner import (
+from agent_crossbar import runner as runner_module
+from agent_crossbar.jobs import JobStore
+from agent_crossbar.runner import (
     CommandCandidate,
     CuaDriverClient,
     _active_chatgpt_model_is_pro,
@@ -198,10 +198,10 @@ def test_reasonix_dev_print_runner_uses_high_effort_run_with_config():
         "high",
         "--mcp",
     ]
-    assert calls[0][7].startswith("agent_relay_shell=")
+    assert calls[0][7].startswith("agent_crossbar_shell=")
     assert "run_shell_command" in calls[0][-1]
     assert "Create no files. Reply READY." in calls[0][-1]
-    assert envs[0]["AGENT_RELAY_SHELL_CWD"] == str(Path.cwd())
+    assert envs[0]["AGENT_CROSSBAR_SHELL_CWD"] == str(Path.cwd())
 
 
 def test_opencode_dev_print_runner_uses_opencode_go_model_candidate():
@@ -919,7 +919,7 @@ def test_job_stop_kills_recorded_tmux_session(tmp_path, monkeypatch):
         calls.append(args)
         return _completed("")
 
-    monkeypatch.setattr("agent_relay_mcp.jobs.subprocess.run", fake_run)
+    monkeypatch.setattr("agent_crossbar.jobs.subprocess.run", fake_run)
 
     response = store.stop_job(job.job_id, reason="user_cancelled")
 
@@ -1112,7 +1112,7 @@ def test_run_tmux_job_fails_fast_when_reasonix_resumes_session(tmp_path):
 
 
 def legacy_chatgpt_native_runner_uses_native_app_and_extracts_nonce(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     calls: list[tuple[str, dict]] = []
     typed: dict[str, str] = {}
 
@@ -1198,7 +1198,7 @@ def legacy_chatgpt_native_runner_uses_native_app_and_extracts_nonce(monkeypatch,
 
 
 def test_chatgpt_browser_runner_falls_back_in_fixed_order(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     seen: list[str] = []
 
     def fake_candidate(candidate, req, cua, sleep, deadline, nonce):
@@ -1244,7 +1244,7 @@ def test_chatgpt_browser_candidates_exclude_unsupported_zen():
 
 
 def test_chatgpt_browser_runner_reports_all_fallback_failures(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     def fake_candidate(candidate, req, cua, sleep, deadline, nonce):
         return {
@@ -1288,7 +1288,7 @@ def test_chatgpt_browser_runner_reports_all_fallback_failures(monkeypatch, tmp_p
 
 
 def test_chatgpt_browser_runner_preserves_shared_screen_time_failure(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     def fake_candidate(candidate, req, cua, sleep, deadline, nonce):
         return {
@@ -1315,7 +1315,7 @@ def test_chatgpt_browser_runner_preserves_shared_screen_time_failure(monkeypatch
 def test_chatgpt_browser_runner_does_not_aggregate_partial_screen_time_failure(
     monkeypatch, tmp_path
 ):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     calls = 0
 
     def fake_candidate(candidate, req, cua, sleep, deadline, nonce):
@@ -1345,7 +1345,7 @@ def test_chatgpt_browser_runner_does_not_aggregate_partial_screen_time_failure(
 
 
 def test_chatgpt_browser_runner_preserves_post_submit_timeout_state(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
     def fake_candidate(candidate, req, cua, sleep, deadline, nonce):
         return {
@@ -2979,7 +2979,7 @@ def test_chatgpt_candidate_ignores_progress_callback_failure_after_submit(monkey
 def test_chatgpt_browser_runner_never_falls_back_after_post_submit_page_exception(
     monkeypatch, tmp_path
 ):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     seen: list[str] = []
 
     def fake_candidate(candidate, req, cua, sleep, deadline, nonce):
@@ -3115,7 +3115,7 @@ def test_chatgpt_generation_retries_timed_out_page_reads_then_returns_response(
 def test_chatgpt_generation_read_timeouts_reach_deadline_without_browser_fallback(
     monkeypatch, tmp_path
 ):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     candidate = runner_module._CHATGPT_BROWSER_CANDIDATES[0]
     monkeypatch.setattr(
         runner_module,
@@ -3495,7 +3495,7 @@ def test_chatgpt_web_candidate_does_not_submit_when_clipboard_paste_fails(monkey
 
 
 def legacy_chatgpt_native_runner_accepts_chatgpt_classic_launch_metadata(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     typed: dict[str, str] = {}
 
     class FakeCua:
@@ -3600,7 +3600,7 @@ def test_chatgpt_snapshot_rejects_unknown_bundle_without_chatgpt_marker():
 def legacy_chatgpt_native_runner_accepts_visible_window_when_space_flag_missing(
     monkeypatch, tmp_path
 ):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     typed: dict[str, str] = {}
 
     class FakeCua:
@@ -3680,7 +3680,7 @@ def legacy_chatgpt_native_runner_accepts_visible_window_when_space_flag_missing(
 def legacy_chatgpt_native_runner_accepts_missing_bundle_id_when_tree_is_chatgpt(
     monkeypatch, tmp_path
 ):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     typed: dict[str, str] = {}
 
     class FakeCua:
@@ -3758,7 +3758,7 @@ def legacy_chatgpt_native_runner_accepts_missing_bundle_id_when_tree_is_chatgpt(
 
 
 def legacy_chatgpt_native_runner_switches_model_to_pro_before_submit(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     events: list[tuple[str, int | None]] = []
     typed: dict[str, str] = {}
     state = {"picker_open": False, "pro_selected": False}
@@ -3856,19 +3856,19 @@ def legacy_chatgpt_native_runner_switches_model_to_pro_before_submit(monkeypatch
 
 
 def legacy_chatgpt_native_runner_uses_copy_menu_when_ax_text_is_blank(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     # Enough ticks for the window polling loop (8s deadline, 0.5s sleep intervals)
     # plus the main response polling deadline.
     ticks = iter([0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5, 2.0, 2.0, 4.0, 4.0, 4.0, 4.0])
-    monkeypatch.setattr("agent_relay_mcp.runner.time.monotonic", lambda: next(ticks))
-    monkeypatch.setattr("agent_relay_mcp.runner.time.sleep", lambda _: None)
+    monkeypatch.setattr("agent_crossbar.runner.time.monotonic", lambda: next(ticks))
+    monkeypatch.setattr("agent_crossbar.runner.time.sleep", lambda _: None)
     clipboard = {"text": "original clipboard"}
     typed: dict[str, str] = {}
     state = {"menu_open": False}
 
-    monkeypatch.setattr("agent_relay_mcp.runner._read_text_clipboard", lambda: clipboard["text"])
+    monkeypatch.setattr("agent_crossbar.runner._read_text_clipboard", lambda: clipboard["text"])
     monkeypatch.setattr(
-        "agent_relay_mcp.runner._write_text_clipboard",
+        "agent_crossbar.runner._write_text_clipboard",
         lambda text: clipboard.update(text=text),
     )
 
@@ -3998,7 +3998,7 @@ def test_chatgpt_active_model_check_requires_selected_model_label():
 
 
 def test_chatgpt_pro_gui_runner_lock_blocks_second_job(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
     lock_dir = tmp_path / "locks"
     lock_dir.mkdir(parents=True)
     (lock_dir / "chatgpt_pro.lock").write_text('{"created_at": 9999999999}', encoding="utf-8")
@@ -4027,7 +4027,7 @@ def test_cua_driver_client_accepts_plain_text_action_output(monkeypatch):
     def fake_run(args, **kwargs):
         return _completed("clicked\n")
 
-    monkeypatch.setattr("agent_relay_mcp.runner.subprocess.run", fake_run)
+    monkeypatch.setattr("agent_crossbar.runner.subprocess.run", fake_run)
 
     result = CuaDriverClient(bin_path="cua-driver").call("click", {"pid": 123})
 

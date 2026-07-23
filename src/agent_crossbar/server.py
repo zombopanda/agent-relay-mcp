@@ -16,24 +16,24 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from agent_relay_mcp.acp_runtime import run_acp_job as _run_acp_job
-from agent_relay_mcp.adapters.claude import LocalSubprocessRunner
-from agent_relay_mcp.adapters.registry import get_adapter
-from agent_relay_mcp.agent_runner import start_agent_job
-from agent_relay_mcp.discovery import cached_profile_health_entry, live_profile_registry
-from agent_relay_mcp.env_compat import getenv
-from agent_relay_mcp.envelope import sanitize_diagnostic_text
-from agent_relay_mcp.jobs import JobStore
-from agent_relay_mcp.profiles import list_profiles
-from agent_relay_mcp.runner import (
+from agent_crossbar.acp_runtime import run_acp_job as _run_acp_job
+from agent_crossbar.adapters.claude import LocalSubprocessRunner
+from agent_crossbar.adapters.registry import get_adapter
+from agent_crossbar.agent_runner import start_agent_job
+from agent_crossbar.discovery import cached_profile_health_entry, live_profile_registry
+from agent_crossbar.env_compat import getenv
+from agent_crossbar.envelope import sanitize_diagnostic_text
+from agent_crossbar.jobs import JobStore
+from agent_crossbar.profiles import list_profiles
+from agent_crossbar.runner import (
     CHATGPT_PRO_DEFAULT_TIMEOUT_SEC,
     run_tmux_job,
     start_gui_job,
     start_print_job,
     start_tmux_job,
 )
-from agent_relay_mcp.telemetry import TelemetryStore
-from agent_relay_mcp.validation import validate_start_request
+from agent_crossbar.telemetry import TelemetryStore
+from agent_crossbar.validation import validate_start_request
 
 mcp = FastMCP("agents")
 _sync_request_state: ContextVar[tuple[str, threading.Event, asyncio.Task[Any] | None] | None] = (
@@ -42,10 +42,10 @@ _sync_request_state: ContextVar[tuple[str, threading.Event, asyncio.Task[Any] | 
 
 
 def _state_root() -> Path:
-    env_dir = getenv("AGENT_RELAY_STATE_DIR")
+    env_dir = getenv("AGENT_CROSSBAR_STATE_DIR")
     if env_dir:
         return Path(env_dir)
-    return Path.home() / ".local" / "state" / "agent-relay-mcp"
+    return Path.home() / ".local" / "state" / "agent-crossbar"
 
 
 def _job_store() -> JobStore:
@@ -63,15 +63,15 @@ def _client_metadata(
     if client_name is not None:
         data["name"] = client_name
     else:
-        env_client_name = getenv("AGENT_RELAY_CLIENT_NAME")
+        env_client_name = getenv("AGENT_CROSSBAR_CLIENT_NAME")
         if env_client_name:
             data.setdefault("name", env_client_name)
-    data.setdefault("name", "agent-relay-mcp")
+    data.setdefault("name", "agent-crossbar")
 
     if client_version is not None:
         data["version"] = client_version
     else:
-        env_client_version = getenv("AGENT_RELAY_CLIENT_VERSION")
+        env_client_version = getenv("AGENT_CROSSBAR_CLIENT_VERSION")
         if env_client_version:
             data.setdefault("version", env_client_version)
     data.setdefault("version", "unknown")
@@ -161,7 +161,7 @@ def _advice_timeout_sec(profile: str, timeout_sec: int | None) -> int:
 
 def _default_dev_cwd() -> str:
     """Prefer the client's inherited shell cwd over uv's package cwd."""
-    for key in ("AGENT_RELAY_DEFAULT_CWD", "PWD"):
+    for key in ("AGENT_CROSSBAR_DEFAULT_CWD", "PWD"):
         raw = getenv(key)
         if raw and Path(raw).expanduser().exists():
             return str(Path(raw).expanduser())
@@ -427,7 +427,7 @@ def agent_start(
     - ``max_runtime_sec`` is the job wall-clock execution limit.  When
       exceeded the job result envelope reports ``max_runtime_exceeded``.
     """
-    from agent_relay_mcp.profiles import resolve_profile
+    from agent_crossbar.profiles import resolve_profile
 
     # ── pre-validation: reject before any state mutation ──
     if task not in _VALID_TASKS:
@@ -463,7 +463,7 @@ def agent_start(
         return _tool_error("cwd_required", "scope requires cwd")
 
     # ── preflight: cached readiness probe before any state mutation ──
-    from agent_relay_mcp.readiness import probe_profile as _readiness_probe
+    from agent_crossbar.readiness import probe_profile as _readiness_probe
 
     try:
         readiness = _readiness_probe(resolved, use_cache=True)
@@ -481,7 +481,7 @@ def agent_start(
     # Fallback: if profile doesn't support the mapped operation, try alternatives.
     # Codex has no "advice" operation — use "text" for ask tasks.
     if task == "ask":
-        from agent_relay_mcp.profiles import profile_operations as _prof_ops
+        from agent_crossbar.profiles import profile_operations as _prof_ops
 
         if operation not in _prof_ops(resolved):
             operation = "text"
@@ -694,7 +694,7 @@ def agent_start(
                 }
 
             # ── Preflight: provider-specific readiness before any state mutation ──
-            from agent_relay_mcp.acp_lifecycle import (
+            from agent_crossbar.acp_lifecycle import (
                 check_codex_acp_readiness,
                 check_opencode_acp_readiness,
             )
@@ -887,7 +887,7 @@ def profile_health(
     """
 
     def _handle() -> dict[str, Any]:
-        from agent_relay_mcp.readiness import probe_all_profiles
+        from agent_crossbar.readiness import probe_all_profiles
 
         state_root = _state_root()
         results = probe_all_profiles()
@@ -1083,7 +1083,7 @@ def job_stop(
                 reason=reason,
                 client_session_id=_effective_client_session_id(client, client_session_id),
             )
-            from agent_relay_mcp.acp_runtime import safe_acp_termination
+            from agent_crossbar.acp_runtime import safe_acp_termination
 
             meta = store._read_job_meta(job.path)  # re-read after stop_job
             acp_stop_data = safe_acp_termination(meta)

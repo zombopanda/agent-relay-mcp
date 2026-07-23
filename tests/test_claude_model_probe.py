@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from agent_relay_mcp.adapters.claude import ClaudeAdapter
-from agent_relay_mcp.adapters.claude_model_probe import (
+from agent_crossbar.adapters.claude import ClaudeAdapter
+from agent_crossbar.adapters.claude_model_probe import (
     _EXPLICIT_ID_RE,
     _MODEL_DISPLAY_PATTERNS,
     _MODEL_FAMILIES,
@@ -508,7 +508,7 @@ def test_display_patterns_match_all_families() -> None:
 
 def test_posix_probe_unsupported_platform(monkeypatch) -> None:
     """PosixClaudeModelProbe returns unsupported error on non-POSIX."""
-    from agent_relay_mcp.adapters.claude_model_probe import PosixClaudeModelProbe
+    from agent_crossbar.adapters.claude_model_probe import PosixClaudeModelProbe
 
     monkeypatch.setattr("sys.platform", "win32")
     probe = PosixClaudeModelProbe()
@@ -656,7 +656,7 @@ REAL_211_PICKER = (
     "[Screen Reader Mode: on via flag]\n"
     "Claude Code v2.1.211\n"
     "Sonnet 5 with high effort · Claude Team\n"
-    "~/src/example-project/packages/agent-relay-mcp\n"
+    "~/src/example-project/packages/agent-crossbar\n"
     "warning: Safe mode...\n"
     "plan mode on...\n"
     "$you: /model\n"
@@ -871,7 +871,7 @@ def test_resolve_numbered_label_unknown_returns_none() -> None:
 
 def test_ring_buffer_retains_latest_not_earliest_bytes() -> None:
     """Ring buffer keeps latest bytes, not earliest (regression)."""
-    from agent_relay_mcp.adapters.claude_model_probe import _MAX_CAPTURED_BYTES
+    from agent_crossbar.adapters.claude_model_probe import _MAX_CAPTURED_BYTES
 
     # Simulate: 2 KiB early + 35 KiB late = 37 KiB > 32 KiB cap.
     # The cap keeps the last 32 KiB, so all early bytes are evicted.
@@ -942,7 +942,7 @@ def test_prompt_pattern_rejects_non_prompt_text() -> None:
 def test_prompt_pattern_matches_dollar_prompt() -> None:
     """_PROMPT_PATTERN matches standalone $ prompt (screen-reader mode)."""
     # Real Claude 2.1.211 fixture: session name line then standalone $
-    assert _PROMPT_PATTERN.search(b"agent-relay-model-probe-d6a7b02e\r\n$") is not None
+    assert _PROMPT_PATTERN.search(b"agent-crossbar-model-probe-d6a7b02e\r\n$") is not None
     # Standalone $ at end of buffer
     assert _PROMPT_PATTERN.search(b"$") is not None
     # $ with trailing space (typical shell-like prompt)
@@ -972,9 +972,11 @@ def test_prompt_pattern_rejects_dollar_in_content() -> None:
 # ── Prompt recognition on sanitized output ──────────────────────────────────
 
 # Real fixture: Claude 2.1.211 screen-reader mode output with standalone `$`
-_SANITIZED_DOLLAR_PROMPT = bytearray(b"agent-relay-model-probe-d6a7b02e\r\n$")
+_SANITIZED_DOLLAR_PROMPT = bytearray(b"agent-crossbar-model-probe-d6a7b02e\r\n$")
 # Same fixture but with trailing ANSI cursor-show + erase-line after the `$`
-_RAW_DOLLAR_WITH_TRAILING_ANSI = bytearray(b"agent-relay-model-probe-d6a7b02e\r\n$\x1b[?25h\x1b[K")
+_RAW_DOLLAR_WITH_TRAILING_ANSI = bytearray(
+    b"agent-crossbar-model-probe-d6a7b02e\r\n$\x1b[?25h\x1b[K"
+)
 # Dollar *inside* content line (not a prompt)
 _DOLLAR_IN_CONTENT = bytearray(b"cost: $100")
 _DOLLAR_IN_CONTENT_MULTILINE = bytearray(b"the total is $5\r\nnext line")
@@ -1117,7 +1119,7 @@ def test_strip_ansi_normalizes_nbsp() -> None:
 
 def test_safe_base_args_include_ax_screen_reader() -> None:
     """The static safe-argv base includes --ax-screen-reader for deterministic output."""
-    from agent_relay_mcp.adapters.claude_model_probe import _SAFE_CLAUDE_BASE_ARGS
+    from agent_crossbar.adapters.claude_model_probe import _SAFE_CLAUDE_BASE_ARGS
 
     args_list = list(_SAFE_CLAUDE_BASE_ARGS)
     assert "--ax-screen-reader" in args_list
@@ -1125,7 +1127,7 @@ def test_safe_base_args_include_ax_screen_reader() -> None:
 
 def test_safe_base_args_include_safe_mode_and_plan_permission() -> None:
     """Core safety flags are present in the static base args."""
-    from agent_relay_mcp.adapters.claude_model_probe import _SAFE_CLAUDE_BASE_ARGS
+    from agent_crossbar.adapters.claude_model_probe import _SAFE_CLAUDE_BASE_ARGS
 
     args_list = list(_SAFE_CLAUDE_BASE_ARGS)
     assert "--safe-mode" in args_list
@@ -1136,7 +1138,7 @@ def test_safe_base_args_include_safe_mode_and_plan_permission() -> None:
 
 def test_safe_base_args_include_empty_mcp_config() -> None:
     """Empty MCP config is present to avoid inheriting user MCP servers."""
-    from agent_relay_mcp.adapters.claude_model_probe import (
+    from agent_crossbar.adapters.claude_model_probe import (
         _EMPTY_MCP_CONFIG,
         _SAFE_CLAUDE_BASE_ARGS,
     )
@@ -1148,7 +1150,7 @@ def test_safe_base_args_include_empty_mcp_config() -> None:
 
 def test_build_probe_argv_includes_session_id_and_name() -> None:
     """_build_probe_argv adds unique --session-id and --name per invocation."""
-    from agent_relay_mcp.adapters.claude_model_probe import _build_probe_argv
+    from agent_crossbar.adapters.claude_model_probe import _build_probe_argv
 
     argv1 = _build_probe_argv()
     argv2 = _build_probe_argv()
@@ -1166,8 +1168,8 @@ def test_build_probe_argv_includes_session_id_and_name() -> None:
     assert len(session_id) == 36
     assert session_id.count("-") == 4
     # name format
-    assert name.startswith("agent-relay-model-probe-")
-    assert len(name) > len("agent-relay-model-probe-")
+    assert name.startswith("agent-crossbar-model-probe-")
+    assert len(name) > len("agent-crossbar-model-probe-")
     # short ID is first 8 chars of UUID
     assert session_id[:8] == name.split("-")[-1]
 
@@ -1178,7 +1180,7 @@ def test_build_probe_argv_includes_session_id_and_name() -> None:
 
 def test_build_probe_argv_no_print_flag() -> None:
     """_build_probe_argv does NOT include -p / --print (we need interactive TUI)."""
-    from agent_relay_mcp.adapters.claude_model_probe import _build_probe_argv
+    from agent_crossbar.adapters.claude_model_probe import _build_probe_argv
 
     argv = _build_probe_argv()
     assert "-p" not in argv
@@ -1187,7 +1189,7 @@ def test_build_probe_argv_no_print_flag() -> None:
 
 def test_build_probe_argv_no_api_key_or_fake_home() -> None:
     """_build_probe_argv does NOT bypass auth with API key env or fake HOME."""
-    from agent_relay_mcp.adapters.claude_model_probe import _build_probe_argv
+    from agent_crossbar.adapters.claude_model_probe import _build_probe_argv
 
     argv = _build_probe_argv()
     assert "ANTHROPIC_API_KEY" not in str(argv)

@@ -12,17 +12,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 # ── production target ────────────────────────────────────────────────
-from agent_relay_mcp.acp_client import (
+from agent_crossbar.acp_client import (
     AcpError,
     AcpLaunchError,
     AcpProtocolError,
     AcpResult,
     AcpTimeoutError,
 )
-from agent_relay_mcp.acp_runtime import build_acp_agent_command, run_acp_job
-from agent_relay_mcp.envelope import FAILURE_STAGES
-from agent_relay_mcp.jobs import JobStore
-from agent_relay_mcp.models import Autonomy
+from agent_crossbar.acp_runtime import build_acp_agent_command, run_acp_job
+from agent_crossbar.envelope import FAILURE_STAGES
+from agent_crossbar.jobs import JobStore
+from agent_crossbar.models import Autonomy
 
 # ── helpers ──────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ class TestRunAcpJobSuccess:
         )
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(return_value=acp_result),
         ) as mock_run:
             asyncio.run(
@@ -137,7 +137,7 @@ class TestRunAcpJobTimeout:
         store, job_id = _create_job_store(tmp_path)
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(side_effect=AcpTimeoutError("ACP prompt timed out after 1.0s")),
         ):
             asyncio.run(
@@ -185,7 +185,7 @@ class TestRunAcpJobPromptDeliveryTimeout:
         store, job_id = _create_job_store(tmp_path)
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(
                 side_effect=AcpTimeoutError(
                     "ACP prompt timed out after 12.0s", stage="prompt_delivery"
@@ -226,7 +226,7 @@ class TestRunAcpJobLaunchError:
         store, job_id = _create_job_store(tmp_path)
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(side_effect=AcpLaunchError("Provider binary not found: opencode")),
         ):
             asyncio.run(
@@ -265,7 +265,7 @@ class TestRunAcpJobProtocolError:
         store, job_id = _create_job_store(tmp_path)
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(
                 side_effect=AcpProtocolError("handshake failed", stage="prompt_delivery")
             ),
@@ -309,7 +309,7 @@ class TestRunAcpJobProtocolError:
         store, job_id = _create_job_store(tmp_path)
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(side_effect=AcpProtocolError("stream corrupted", stage="execution")),
         ):
             asyncio.run(
@@ -370,7 +370,7 @@ class TestSafeErrorRedaction:
         leaked = "sk-live-should-not-leak-1234567890"
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(
                 side_effect=Exception(f"upstream call failed: Authorization: Bearer {leaked}")
             ),
@@ -400,7 +400,7 @@ class TestSafeErrorRedaction:
         leaked = "abcDEF1234567890"
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(side_effect=Exception(f"config error: OPENAI_API_KEY={leaked}")),
         ):
             asyncio.run(
@@ -435,7 +435,7 @@ class TestRunAcpJobEvents:
         )
 
         with patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(return_value=acp_result),
         ):
             asyncio.run(
@@ -478,7 +478,7 @@ class TestRunAcpJobEvents:
 def _run_job_and_get_failure_stage(tmp_path, *, autonomy, side_effect) -> str:
     store, job_id = _create_job_store(tmp_path)
     with patch(
-        "agent_relay_mcp.acp_runtime.run_acp_prompt",
+        "agent_crossbar.acp_runtime.run_acp_prompt",
         new=AsyncMock(side_effect=side_effect),
     ):
         asyncio.run(

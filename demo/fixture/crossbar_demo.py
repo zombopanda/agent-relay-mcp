@@ -1,4 +1,4 @@
-"""Tiny deterministic fixture used by the bidirectional Agent Relay MCP demo."""
+"""Tiny deterministic fixture used by the bidirectional Agent Crossbar demo."""
 
 
 def display_name(raw: str) -> str:

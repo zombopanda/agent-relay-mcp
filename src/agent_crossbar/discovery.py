@@ -372,7 +372,7 @@ def cached_profile_health_entry(state_root: Path, profile: str) -> dict[str, Any
             if last_failure is not None
             else (
                 "No cached model discovery yet — it is populated by starting a job "
-                "or running `agent-relay-mcp doctor`."
+                "or running `agent-crossbar doctor`."
             )
         )
         return {

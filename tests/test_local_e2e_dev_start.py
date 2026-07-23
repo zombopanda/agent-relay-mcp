@@ -70,8 +70,8 @@ def _mcporter_config(tmp_path: Path) -> Path:
                         "command": uv,
                         "args": ["run", "--directory", str(PACKAGE_DIR), "agents-mcp"],
                         "env": {
-                            "AGENT_RELAY_STATE_DIR": str(state_root),
-                            "AGENT_RELAY_CLIENT_NAME": "local-e2e",
+                            "AGENT_CROSSBAR_STATE_DIR": str(state_root),
+                            "AGENT_CROSSBAR_CLIENT_NAME": "local-e2e",
                         },
                     }
                 }
@@ -111,8 +111,8 @@ async def _stdio_call_once(
     if not uv:
         pytest.skip("uv is required for local MCP e2e smokes")
     env = os.environ.copy()
-    env["AGENT_RELAY_STATE_DIR"] = str(state_root)
-    env["AGENT_RELAY_CLIENT_NAME"] = "short-lived-stdio-e2e"
+    env["AGENT_CROSSBAR_STATE_DIR"] = str(state_root)
+    env["AGENT_CROSSBAR_CLIENT_NAME"] = "short-lived-stdio-e2e"
     params = StdioServerParameters(
         command=uv,
         args=["run", "--directory", str(PACKAGE_DIR), "agents-mcp"],
@@ -191,7 +191,7 @@ async def _with_session(fn):
         pytest.skip("uv is required for local MCP e2e smokes")
     with tempfile.TemporaryDirectory(prefix="agents-mcp-local-e2e-") as state_root:
         env = os.environ.copy()
-        env["AGENT_RELAY_STATE_DIR"] = state_root
+        env["AGENT_CROSSBAR_STATE_DIR"] = state_root
         params = StdioServerParameters(
             command=uv,
             args=["run", "--directory", str(PACKAGE_DIR), "agents-mcp"],

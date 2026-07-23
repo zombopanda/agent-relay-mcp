@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agent_relay_mcp.profiles import (
+from agent_crossbar.profiles import (
     CLAUDE_MODEL_IDS,
     CODEX_DEFAULT_EFFORT,
     CODEX_DEFAULT_MODEL,
@@ -49,18 +49,18 @@ REASONIX_ALLOWED_MODELS: frozenset[str] = frozenset({"deepseek-v4-flash", "deeps
 
 def reasonix_shell_mcp_spec() -> str:
     """Return the local YOLO shell MCP spec for Reasonix dev runs."""
-    return f"agent_relay_shell={sys.executable} -m agent_relay_mcp.shell_server"
+    return f"agent_crossbar_shell={sys.executable} -m agent_crossbar.shell_server"
 
 
 def reasonix_shell_env(cwd: str | None) -> dict[str, str]:
     """Root Reasonix shell tools in the requested dev cwd."""
-    return {"AGENT_RELAY_SHELL_CWD": str(cwd or os.getcwd())}
+    return {"AGENT_CROSSBAR_SHELL_CWD": str(cwd or os.getcwd())}
 
 
 def reasonix_dev_prompt(prompt: str) -> str:
     """Tell Reasonix dev runs that the harness-provided shell tool is available."""
     return (
-        "You have YOLO shell access through the agent_relay_shell MCP server. "
+        "You have YOLO shell access through the agent_crossbar_shell MCP server. "
         "Use its run_shell_command tool for local shell commands and return the "
         "actual command output when the user asks for it.\n\n"
         f"{prompt}"
@@ -210,9 +210,9 @@ def _reasonix_plan(
 
         transcript = f"{job_dir}/transcript.jsonl" if job_dir else None
         session_name = (
-            f"agent-relay-gate-{_re.sub(r'[^A-Za-z0-9_-]+', '-', Path(job_dir).name).strip('-')}"
+            f"agent-crossbar-gate-{_re.sub(r'[^A-Za-z0-9_-]+', '-', Path(job_dir).name).strip('-')}"
             if job_dir
-            else "agent-relay-gate-default"
+            else "agent-crossbar-gate-default"
         )
         chat_args = [
             "reasonix",

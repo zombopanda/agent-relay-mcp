@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from agent_relay_mcp.adapters.claude import (
+from agent_crossbar.adapters.claude import (
     ClaudeAdapter,
     RunResult,
     build_claude_launch,
@@ -220,7 +220,7 @@ def test_readiness_uses_claude_auth_status_not_agents_listing() -> None:
 
 def test_model_discovery_never_labels_a_static_fallback_as_live() -> None:
     """Claude discover_models with probe error returns honest empty — never a static fallback."""
-    from agent_relay_mcp.adapters.claude_model_probe import ProbeResult
+    from agent_crossbar.adapters.claude_model_probe import ProbeResult
 
     class FakeProbe:
         def probe(self) -> ProbeResult:
@@ -266,7 +266,7 @@ def test_result_normalization_uses_state_and_waiting_for() -> None:
 @pytest.mark.parametrize("effort", ["low", "medium", "high", "max"])
 def test_claude_launch_includes_effort_in_argv(effort):
     """Claude launch argv includes --effort with the requested value."""
-    from agent_relay_mcp.adapters.claude import build_claude_launch
+    from agent_crossbar.adapters.claude import build_claude_launch
 
     result = build_claude_launch(
         model="opus",
@@ -283,7 +283,7 @@ def test_claude_launch_includes_effort_in_argv(effort):
 
 def test_claude_launch_rejects_unknown_effort():
     """Claude launch rejects an effort not in PUBLIC_EFFORTS."""
-    from agent_relay_mcp.adapters.claude import build_claude_launch
+    from agent_crossbar.adapters.claude import build_claude_launch
 
     result = build_claude_launch(
         model="opus",
@@ -309,7 +309,7 @@ CLAUDE_ANSI_OUTPUT = (
 
 def test_normalize_claude_result_strips_ansi_osc_and_control_chars():
     """Claude TUI output must be cleaned of raw ANSI/OSC/control sequences."""
-    from agent_relay_mcp.adapters.claude import normalize_claude_result
+    from agent_crossbar.adapters.claude import normalize_claude_result
 
     result = normalize_claude_result(
         {"id": "abc123", "state": "done"},
@@ -350,7 +350,7 @@ $
 
 def test_normalize_claude_result_clean_error_field():
     """Error field must also be stripped of ANSI when status is failed."""
-    from agent_relay_mcp.adapters.claude import normalize_claude_result
+    from agent_crossbar.adapters.claude import normalize_claude_result
 
     raw = "error: \x1b[31mfatal\x1b[0m\n"
     result = normalize_claude_result(

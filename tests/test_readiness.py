@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from agent_relay_mcp.adapters.claude import RunResult
-from agent_relay_mcp.readiness import (
+from agent_crossbar.adapters.claude import RunResult
+from agent_crossbar.readiness import (
     PROBE_CACHE_TTL_SECONDS,
     ProbeResult,
     ReadinessResult,
@@ -636,7 +636,7 @@ class TestReasonixReadiness:
         check_reasonix_readiness actually proves. Reasonix authenticates via
         an api-key (DeepSeek), never free defaults — the matrix's
         billing_mode must say so."""
-        from agent_relay_mcp.profiles import PROVIDER_SUPPORT_MATRIX
+        from agent_crossbar.profiles import PROVIDER_SUPPORT_MATRIX
 
         calls = {
             "reasonix --version": RunResult(0, "0.53.2", ""),
@@ -696,7 +696,7 @@ class TestChatGPTProReadiness:
 class TestProbeProfile:
     def test_probe_profile_dispatches_correctly(self, tmp_path, monkeypatch):
         """probe_profile dispatches to the correct provider probe."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
         # Test with a sequence runner proving reasonix's doctor-based auth
         calls = {
@@ -720,7 +720,7 @@ class TestProbeProfile:
 
     def test_probe_profile_unknown(self, tmp_path, monkeypatch):
         """probe_profile rejects unknown profiles."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
         with pytest.raises(ValueError, match="Unknown profile"):
             probe_profile("nonexistent")
 
@@ -731,7 +731,7 @@ class TestProbeProfile:
 class TestReadinessCache:
     def test_cache_stores_and_retrieves(self, tmp_path, monkeypatch):
         """Cache stores ReadinessResult and retrieves it within TTL."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
         rr = ReadinessResult(
             profile="codex",
@@ -754,7 +754,7 @@ class TestReadinessCache:
 
     def test_cache_expires_after_ttl(self, tmp_path, monkeypatch):
         """Cache returns None after TTL expiry."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
         rr = ReadinessResult(
             profile="codex",
@@ -775,7 +775,7 @@ class TestReadinessCache:
 
     def test_cache_clear(self, tmp_path, monkeypatch):
         """Cache can be cleared."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
         rr = ReadinessResult(
             profile="codex",
@@ -795,7 +795,7 @@ class TestReadinessCache:
 
     def test_refresh_readiness_bypasses_cache(self, tmp_path, monkeypatch):
         """refresh_readiness always runs probes, ignoring cache."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
         # Populate cache with a stale ready state
         rr = ReadinessResult(
@@ -863,17 +863,17 @@ class TestPreflightInAgentStart:
 
     def test_missing_binary_rejected_before_job_creation(self, tmp_path, monkeypatch):
         """agent_start must reject when readiness probe says missing_binary."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
         # All provider probes will fail with FileNotFoundError via our mock
         # We need to mock probe_profile to return a non-ready state
-        import agent_relay_mcp.readiness as rmod
-        from agent_relay_mcp.server import agent_start
+        import agent_crossbar.readiness as rmod
+        from agent_crossbar.server import agent_start
 
         def fake_probe(profile, _runner=None, use_cache=True):
             import time
 
-            from agent_relay_mcp.readiness import ReadinessResult
+            from agent_crossbar.readiness import ReadinessResult
 
             return ReadinessResult(
                 profile=profile,
@@ -898,15 +898,15 @@ class TestPreflightInAgentStart:
 
     def test_ready_provider_proceeds_to_job_creation(self, tmp_path, monkeypatch):
         """agent_start creates a job when readiness says ready."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
-        import agent_relay_mcp.readiness as rmod
-        from agent_relay_mcp.server import agent_start
+        import agent_crossbar.readiness as rmod
+        from agent_crossbar.server import agent_start
 
         def fake_probe(profile, _runner=None, use_cache=True):
             import time
 
-            from agent_relay_mcp.readiness import ReadinessResult
+            from agent_crossbar.readiness import ReadinessResult
 
             return ReadinessResult(
                 profile=profile,
@@ -923,7 +923,7 @@ class TestPreflightInAgentStart:
             store.set_result(job_id, True, summary="ok")
 
         monkeypatch.setattr(
-            "agent_relay_mcp.server.start_print_job",
+            "agent_crossbar.server.start_print_job",
             fake_start_print,
         )
 
@@ -934,16 +934,16 @@ class TestPreflightInAgentStart:
 
     def test_preflight_uses_cache_not_fresh_probe_every_time(self, tmp_path, monkeypatch):
         """Subsequent agent_start calls within TTL should use cached probe."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
-        import agent_relay_mcp.readiness as rmod
+        import agent_crossbar.readiness as rmod
 
         call_count = 0
 
         def counting_check(runner=None):
             nonlocal call_count
             call_count += 1
-            from agent_relay_mcp.readiness import ProbeResult
+            from agent_crossbar.readiness import ProbeResult
 
             return ProbeResult(
                 state="ready",
@@ -957,11 +957,11 @@ class TestPreflightInAgentStart:
             store.set_result(job_id, True, summary="ok")
 
         monkeypatch.setattr(
-            "agent_relay_mcp.server.start_print_job",
+            "agent_crossbar.server.start_print_job",
             fake_start_print,
         )
 
-        from agent_relay_mcp.server import agent_start
+        from agent_crossbar.server import agent_start
 
         # First call — should run the probe (via probe_profile → check_reasonix_readiness)
         rmod.readiness_cache.clear()
@@ -975,7 +975,7 @@ class TestPreflightInAgentStart:
         assert call_count == 1  # Still 1, cache hit
 
         # Verify the cache by checking probe_profile directly
-        from agent_relay_mcp.readiness import _cache_key, readiness_cache
+        from agent_crossbar.readiness import _cache_key, readiness_cache
 
         cached = readiness_cache.get(_cache_key("reasonix"))
         assert cached is not None
@@ -986,18 +986,18 @@ class TestPreflightInAgentStart:
 
 
 class TestDoctorCLI:
-    """agent-relay-mcp doctor CLI entrypoint tests."""
+    """agent-crossbar doctor CLI entrypoint tests."""
 
     def test_doctor_json_output(self, tmp_path, monkeypatch, capsys):
         """doctor --json prints valid JSON with profiles array."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
-        import agent_relay_mcp.readiness as rmod
+        import agent_crossbar.readiness as rmod
 
         def fake_probe_all(use_cache=True):
             import time
 
-            from agent_relay_mcp.readiness import ReadinessResult
+            from agent_crossbar.readiness import ReadinessResult
 
             return {
                 "codex": ReadinessResult(
@@ -1012,7 +1012,7 @@ class TestDoctorCLI:
 
         monkeypatch.setattr(rmod, "probe_all_profiles", fake_probe_all)
 
-        from agent_relay_mcp.cli import doctor_cmd
+        from agent_crossbar.cli import doctor_cmd
 
         doctor_cmd(json_output=True)
 
@@ -1025,14 +1025,14 @@ class TestDoctorCLI:
 
     def test_doctor_text_output(self, tmp_path, monkeypatch, capsys):
         """doctor without --json prints human-readable text."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
-        import agent_relay_mcp.readiness as rmod
+        import agent_crossbar.readiness as rmod
 
         def fake_probe_all(use_cache=True):
             import time
 
-            from agent_relay_mcp.readiness import ReadinessResult
+            from agent_crossbar.readiness import ReadinessResult
 
             return {
                 "claude": ReadinessResult(
@@ -1049,7 +1049,7 @@ class TestDoctorCLI:
 
         monkeypatch.setattr(rmod, "probe_all_profiles", fake_probe_all)
 
-        from agent_relay_mcp.cli import doctor_cmd
+        from agent_crossbar.cli import doctor_cmd
 
         doctor_cmd(json_output=False)
 
@@ -1060,14 +1060,14 @@ class TestDoctorCLI:
 
     def test_doctor_single_profile(self, tmp_path, monkeypatch, capsys):
         """doctor --profile NAME filters to one provider."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
-        import agent_relay_mcp.readiness as rmod
+        import agent_crossbar.readiness as rmod
 
         def fake_probe(profile, _runner=None, use_cache=True):
             import time
 
-            from agent_relay_mcp.readiness import ReadinessResult
+            from agent_crossbar.readiness import ReadinessResult
 
             return ReadinessResult(
                 profile=profile,
@@ -1080,7 +1080,7 @@ class TestDoctorCLI:
 
         monkeypatch.setattr(rmod, "probe_profile", fake_probe)
 
-        from agent_relay_mcp.cli import doctor_cmd
+        from agent_crossbar.cli import doctor_cmd
 
         doctor_cmd(json_output=True, profile="codex")
 
@@ -1091,9 +1091,9 @@ class TestDoctorCLI:
 
     def test_doctor_unknown_profile(self, tmp_path, monkeypatch, capsys):
         """doctor with unknown profile exits with error."""
-        monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(tmp_path))
+        monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
 
-        from agent_relay_mcp.cli import doctor_cmd
+        from agent_crossbar.cli import doctor_cmd
 
         with pytest.raises(SystemExit) as exc_info:
             doctor_cmd(profile="nonexistent")
@@ -1149,7 +1149,7 @@ class TestProbeAllProfilesNoSilentOmit:
 
     def test_crashing_probe_returns_misconfigured(self, monkeypatch):
         """A probe that raises Exception must produce a misconfigured result."""
-        import agent_relay_mcp.readiness as rmod
+        import agent_crossbar.readiness as rmod
 
         def crashing_probe(profile, _runner=None, use_cache=True):
             raise RuntimeError("simulated probe crash")
@@ -1158,7 +1158,7 @@ class TestProbeAllProfilesNoSilentOmit:
 
         results = rmod.probe_all_profiles()
         # Must have results for all canonical profiles
-        from agent_relay_mcp.profiles import list_profiles
+        from agent_crossbar.profiles import list_profiles
 
         assert set(results.keys()) == set(list_profiles()), (
             f"probe_all_profiles silently omitted profiles: "

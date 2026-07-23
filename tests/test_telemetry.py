@@ -2,7 +2,7 @@
 
 import json
 
-from agent_relay_mcp.telemetry import TelemetryStore
+from agent_crossbar.telemetry import TelemetryStore
 
 
 def test_telemetry_writes_daily_request_response_and_usage(tmp_path):

@@ -1,8 +1,8 @@
-# Agent Relay MCP
+# Agent Crossbar
 
 Delegate review, advice, text, and dev work to local coding agents — Codex, Claude, OpenCode — through a single MCP server. One `agent_start` call, one `job_result` answer.
 
-**Experimental developer preview (v0.1.3).** APIs may change. Provider guarantees are qualified by live gates.
+**Experimental developer preview (v0.2.0).** APIs may change. Provider guarantees are qualified by live gates.
 
 Expose to MCP clients with the server key `agents`.
 
@@ -16,10 +16,10 @@ Expose to MCP clients with the server key `agents`.
 
 ```bash
 # Canonical: uvx pulls the latest PyPI release
-uvx agent-relay-mcp
+uvx agent-crossbar
 
 # Or via npm (thin launcher → delegates to uvx)
-npx agent-relay-mcp
+npx agent-crossbar
 ```
 
 Prerequisites: [uv](https://docs.astral.sh/uv/getting-started/installation/) (for PyPI) or [Node.js](https://nodejs.org/) ≥ 20 (for npm launcher).
@@ -27,7 +27,7 @@ Prerequisites: [uv](https://docs.astral.sh/uv/getting-started/installation/) (fo
 ### 2. Check Readiness (doctor)
 
 ```bash
-uvx agent-relay-mcp doctor
+uvx agent-crossbar doctor
 ```
 
 Verifies that supported provider CLIs are installed, authenticated, and runnable. A provider must be `ready` before jobs can be created.
@@ -41,7 +41,7 @@ Verifies that supported provider CLIs are installed, authenticated, and runnable
   "mcpServers": {
     "agents": {
       "command": "uvx",
-      "args": ["agent-relay-mcp"]
+      "args": ["agent-crossbar"]
     }
   }
 }
@@ -49,14 +49,14 @@ Verifies that supported provider CLIs are installed, authenticated, and runnable
 
 #### Claude Code MCP Config
 
-Claude Code uses the native `claude_bg` noninteractive backend (`claude` profile). Interactive and print mode are **disabled** in v0.1.3 because `claude -p` uses separate Agent SDK credit/metered billing — read [Claude Billing](#claude-subscription-vs-print-sdk-billing) below.
+Claude Code uses the native `claude_bg` noninteractive backend (`claude` profile). Interactive and print mode are **disabled** in v0.2.0 because `claude -p` uses separate Agent SDK credit/metered billing — read [Claude Billing](#claude-subscription-vs-print-sdk-billing) below.
 
 ```json
 {
   "mcpServers": {
     "agents": {
       "command": "uvx",
-      "args": ["agent-relay-mcp"]
+      "args": ["agent-crossbar"]
     }
   }
 }
@@ -71,7 +71,7 @@ Claude Code uses the native `claude_bg` noninteractive backend (`claude` profile
   "mcpServers": {
     "agents": {
       "command": "uvx",
-      "args": ["agent-relay-mcp"]
+      "args": ["agent-crossbar"]
     }
   }
 }
@@ -139,7 +139,7 @@ result is informational and does not promote Reasonix to the supported tier.
 
 ## Claude: Native Background Path
 
-Agent Relay MCP uses Claude's native `claude --bg` (noninteractive) subscription path. This uses your ordinary Claude plan — no separate API billing.
+Agent Crossbar uses Claude's native `claude --bg` (noninteractive) subscription path. This uses your ordinary Claude plan — no separate API billing.
 
 - `claude -p` (print/SDK mode) is **disabled** — it uses separate Agent SDK metered billing
 - `job_send` (interactive send) is **not available** for Claude bg jobs today
@@ -159,10 +159,10 @@ The `doctor` CLI reports readiness and preflight failures only. It does **not** 
 
 ## Local State and Retention
 
-- **State directory**: `~/.local/state/agent-relay-mcp` (override with `AGENT_RELAY_STATE_DIR`)
+- **State directory**: `~/.local/state/agent-crossbar` (override with `AGENT_CROSSBAR_STATE_DIR`)
 - **Job storage**: one directory per job under `jobs/`
-- **Retention**: no automatic cleanup in v0.1.3 — jobs persist until manually deleted
-- **No remote telemetry**: Agent Relay MCP does not phone home. All state is local.
+- **Retention**: no automatic cleanup in v0.2.0 — jobs persist until manually deleted
+- **No remote telemetry**: Agent Crossbar does not phone home. All state is local.
 
 ## Troubleshooting by Error Code
 
@@ -177,11 +177,11 @@ The `doctor` CLI reports readiness and preflight failures only. It does **not** 
 | `reasonix_missing` | Reasonix CLI not on PATH | Install the Reasonix CLI |
 | `unsupported_os` | Provider requires different OS | Use a supported OS or different provider |
 | `chatgpt_pro_manual_gate` | ChatGPT Pro needs manual setup | Launch ChatGPT desktop app and sign in |
-| `acp_launch_error` | ACP agent process failed to launch (binary missing, dependency error) | Check provider CLI installation, run `agent-relay-mcp doctor` |
+| `acp_launch_error` | ACP agent process failed to launch (binary missing, dependency error) | Check provider CLI installation, run `agent-crossbar doctor` |
 | `acp_protocol_error` | ACP protocol handshake or message error (version mismatch, invalid request) | Check provider and protocol logs; provider CLI may need upgrade |
 | `acp_timeout` | ACP job exceeded `max_runtime_sec` while awaiting an already-delivered prompt's response | Retry with a higher `max_runtime_sec` value |
 | `acp_prompt_delivery_timeout` | ACP job exceeded `max_runtime_sec` before the prompt was ever dispatched to the agent (stuck in handshake/session setup) | Check the provider CLI installation and launch, then retry |
-| `preflight` | Job blocked before creation | Run `agent-relay-mcp doctor` for details |
+| `preflight` | Job blocked before creation | Run `agent-crossbar doctor` for details |
 
 Stable error codes are guaranteed across patch versions. The `next_action` field in job results provides exact remediation.
 
@@ -189,12 +189,12 @@ Stable error codes are guaranteed across patch versions. The `next_action` field
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENT_RELAY_STATE_DIR` | `~/.local/state/agent-relay-mcp` | State root directory |
-| `AGENT_RELAY_CLIENT_NAME` | `agent-relay-mcp` | Client name in telemetry |
-| `AGENT_RELAY_CLIENT_VERSION` | — | Optional client version |
-| `AGENT_RELAY_DEFAULT_CWD` | `PWD` | Default working directory for dev jobs |
+| `AGENT_CROSSBAR_STATE_DIR` | `~/.local/state/agent-crossbar` | State root directory |
+| `AGENT_CROSSBAR_CLIENT_NAME` | `agent-crossbar` | Client name in telemetry |
+| `AGENT_CROSSBAR_CLIENT_VERSION` | — | Optional client version |
+| `AGENT_CROSSBAR_DEFAULT_CWD` | `PWD` | Default working directory for dev jobs |
 
-**Migration note**: The old `AGENT_HARNESS_*` env var names still work but emit a `FutureWarning`. Rename them to `AGENT_RELAY_*`. The compat shim will be removed in v0.4.0.
+**Migration note**: The old `AGENT_HARNESS_*` env var names still work but emit a `FutureWarning`. Rename them to `AGENT_CROSSBAR_*`. The compat shim will be removed in v0.4.0.
 
 ## Architecture
 
@@ -212,7 +212,7 @@ MCP Client (Codex / Claude / OpenCode)
   tmux / print / ACP  ← transports
 ```
 
-One Python package (`agent-relay-mcp` on PyPI). Bounded provider adapters under `agent_relay_mcp.adapters`. No separate plugin packages in v0.1.3.
+One Python package (`agent-crossbar` on PyPI). Bounded provider adapters under `agent_crossbar.adapters`. No separate plugin packages in v0.2.0.
 
 ## Contributing
 

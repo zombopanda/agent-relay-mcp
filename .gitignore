@@ -1,5 +1,5 @@
 .DS_Store
-.agent-relay-mcp/
+.agent-crossbar/
 .memsearch/
 .reasonix/
 .pytest_cache/

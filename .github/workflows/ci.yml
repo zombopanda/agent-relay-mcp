@@ -94,7 +94,7 @@ jobs:
       - name: Ruff lint
         run: |
           /tmp/ci-venv/bin/ruff check \
-            src/agent_relay_mcp/ \
+            src/agent_crossbar/ \
             scripts/provider_surface_gate.py \
             tests/test_minimal_public_contract.py \
             tests/test_claude_adapter.py \
@@ -103,7 +103,7 @@ jobs:
       - name: Ruff format check
         run: |
           /tmp/ci-venv/bin/ruff format --check \
-            src/agent_relay_mcp/ \
+            src/agent_crossbar/ \
             scripts/provider_surface_gate.py \
             tests/test_minimal_public_contract.py \
             tests/test_claude_adapter.py \
@@ -152,12 +152,12 @@ jobs:
           uv pip install --python /tmp/smoke-venv/bin/python dist/*.whl
 
       - name: "Smoke: CLI help"
-        run: /tmp/smoke-venv/bin/agent-relay-mcp doctor
+        run: /tmp/smoke-venv/bin/agent-crossbar doctor
 
       - name: "Smoke: import"
         run: |
           /tmp/smoke-venv/bin/python -c \
-            "import agent_relay_mcp; print(agent_relay_mcp.__version__)"
+            "import agent_crossbar; print(agent_crossbar.__version__)"
 
   # ── npm pack + launcher smoke ───────────────────────────────────────────
   npm-smoke:
@@ -178,9 +178,9 @@ jobs:
 
       - name: Verify tarball contents
         run: |
-          tar -tzf agent-relay-mcp-*.tgz | sort
+          tar -tzf agent-crossbar-*.tgz | sort
           # Must NOT contain Python source, pyproject, tests, or internal paths
-          ! tar -tzf agent-relay-mcp-*.tgz | grep -qE '\.py|pyproject\.toml|\.reasonix|\.memsearch|results/|\.pytest_cache|__pycache__|test'
+          ! tar -tzf agent-crossbar-*.tgz | grep -qE '\.py|pyproject\.toml|\.reasonix|\.memsearch|results/|\.pytest_cache|__pycache__|test'
 
       - name: Launcher syntax check
-        run: node --check bin/agent-relay-mcp.mjs
+        run: node --check bin/agent-crossbar.mjs

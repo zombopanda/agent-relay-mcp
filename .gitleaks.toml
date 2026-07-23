@@ -1,7 +1,7 @@
-# Gitleaks configuration for Agent Relay MCP
+# Gitleaks configuration for Agent Crossbar
 # Excludes known non-secret patterns and false positives from the codebase.
 
-title = "Agent Relay MCP gitleaks config"
+title = "Agent Crossbar gitleaks config"
 
 [allowlist]
   description = "Global allowlist"

@@ -1,13 +1,13 @@
 """Compatibility shim for the deprecated ``agent_harness_mcp`` import.
 
-Agent Relay MCP renamed its import package from ``agent_harness_mcp``
-to ``agent_relay_mcp`` in v0.1.3.  This module re-exports the public API
+Agent Crossbar renamed its import package from ``agent_harness_mcp``
+to ``agent_crossbar`` in v0.2.0.  This module re-exports the public API
 so that existing code does not break immediately, but every import emits
 a ``FutureWarning``.
 
 **Migration**: replace ``import agent_harness_mcp`` with
-``import agent_relay_mcp`` and ``from agent_harness_mcp.X import Y`` with
-``from agent_relay_mcp.X import Y``.
+``import agent_crossbar`` and ``from agent_harness_mcp.X import Y`` with
+``from agent_crossbar.X import Y``.
 
 This shim will be removed in v0.4.0.
 """
@@ -19,15 +19,15 @@ import warnings
 
 warnings.warn(
     "The 'agent_harness_mcp' package is deprecated. "
-    "Use 'agent_relay_mcp' instead. "
+    "Use 'agent_crossbar' instead. "
     "This shim will be removed in v0.4.0.",
     FutureWarning,
     stacklevel=2,
 )
 
-# Re-export everything that agent_relay_mcp exposes at package level
+# Re-export everything that agent_crossbar exposes at package level
 # Make submodules accessible
-from agent_relay_mcp import (  # noqa: E402, I001
+from agent_crossbar import (  # noqa: E402, I001
     __version__ as __version__,  # noqa: E402, F401
     acp_lifecycle as acp_lifecycle,
     acp_runtime as acp_runtime,
@@ -82,6 +82,6 @@ for _mod_name in (
     "validation",
 ):
     _full = f"agent_harness_mcp.{_mod_name}"
-    _target = f"agent_relay_mcp.{_mod_name}"
+    _target = f"agent_crossbar.{_mod_name}"
     if _full not in sys.modules:
         sys.modules[_full] = __import__(_target, fromlist=[_mod_name])

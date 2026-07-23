@@ -3,7 +3,7 @@
 Provides the shared readiness schema, provider-specific non-mutating
 probes, a TTL-bounded in-process cache, and the public ``probe_profile``
 entry point used by both ``profile_health`` (MCP tool) and
-``agent-relay-mcp doctor`` (CLI).
+``agent-crossbar doctor`` (CLI).
 
 Design constraints:
 - Probes are SAFE and NON-MUTATING — they inspect state, never change it.
@@ -135,7 +135,7 @@ class ReadinessResult:
     """Structured readiness for one provider profile.
 
     This is the public type returned by ``probe_profile()`` and surfaced
-    in ``profile_health`` and ``agent-relay-mcp doctor``.
+    in ``profile_health`` and ``agent-crossbar doctor``.
     """
 
     profile: str
@@ -705,7 +705,7 @@ def probe_profile(
     *profile* must be a canonical profile name (codex, claude, opencode,
     reasonix, chatgpt_pro).
     """
-    from agent_relay_mcp.adapters.registry import ADAPTERS
+    from agent_crossbar.adapters.registry import ADAPTERS
 
     if profile not in ADAPTERS:
         raise ValueError(f"Unknown profile: {profile!r}")
@@ -759,7 +759,7 @@ def probe_all_profiles(
     Profiles whose probes crash are returned as ``misconfigured`` results
     with a stable error code and remediation — never silently omitted.
     """
-    from agent_relay_mcp.profiles import list_profiles
+    from agent_crossbar.profiles import list_profiles
 
     results: dict[str, ReadinessResult] = {}
     for profile in list_profiles():
@@ -776,7 +776,7 @@ def probe_all_profiles(
             )
             # Derive support tier from adapter
             try:
-                from agent_relay_mcp.adapters.registry import ADAPTERS
+                from agent_crossbar.adapters.registry import ADAPTERS
 
                 tier = ADAPTERS[profile].support_tier
             except Exception:

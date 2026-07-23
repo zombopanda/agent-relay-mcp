@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 30
 
     # Never run on forks — requires maintainer credentials
-    if: github.repository == 'zombopanda/agent-relay-mcp'
+    if: github.repository == 'zombopanda/agent-crossbar'
 
     steps:
       - uses: actions/checkout@v4

@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from agent_relay_mcp.redaction import redact_secrets
+from agent_crossbar.redaction import redact_secrets
 
 DIAGNOSTICS_MAX_BYTES = 2048  # 2 KiB
 

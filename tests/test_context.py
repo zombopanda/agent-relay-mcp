@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_relay_mcp.context import validate_input_artifact
+from agent_crossbar.context import validate_input_artifact
 
 
 def test_secret_mode_requires_caller_context_only(tmp_path: Path):

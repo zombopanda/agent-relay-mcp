@@ -10,14 +10,14 @@ from unittest.mock import patch
 
 import pytest
 
-from agent_relay_mcp.adapters.base import ModelCatalog, ModelInfo
-from agent_relay_mcp.adapters.codex import (
+from agent_crossbar.adapters.base import ModelCatalog, ModelInfo
+from agent_crossbar.adapters.codex import (
     CodexAdapter,
     _max_effort_for_model,
     parse_model_list_response,
 )
-from agent_relay_mcp.adapters.opencode import OpencodeAdapter, parse_models_output
-from agent_relay_mcp.discovery import (
+from agent_crossbar.adapters.opencode import OpencodeAdapter, parse_models_output
+from agent_crossbar.discovery import (
     _PROFILES_WITH_DISCOVERY,
     _catalog_to_dict,
     _dict_to_catalog,
@@ -28,13 +28,13 @@ from agent_relay_mcp.discovery import (
     discover_profile_models,
     live_profile_registry,
 )
-from agent_relay_mcp.discovery_runner import (
+from agent_crossbar.discovery_runner import (
     DiscoveryRun,
     PopenCodexSession,
     _read_jsonl_line,
     discover_codex_models,
 )
-from agent_relay_mcp.model_cache import (
+from agent_crossbar.model_cache import (
     cache_get_or_fetch,
     write_cache,
 )
@@ -300,8 +300,8 @@ def test_opencode_discover_models_handles_error() -> None:
 
 
 def test_opencode_verbose_parser_prefers_qualified_default_when_not_first() -> None:
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
-    from agent_relay_mcp.profiles.opencode import OPENCODE_DEFAULT_MODEL
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.profiles.opencode import OPENCODE_DEFAULT_MODEL
 
     qualified_default = OPENCODE_DEFAULT_MODEL
     output = (
@@ -331,7 +331,7 @@ def test_opencode_verbose_parser_falls_back_deterministically_when_qualified_def
     """Without the qualified default present, fall back to the first discovered
     model — deterministic, but not a claim that it is a qualified/supported
     default."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode/big-pickle\n"
@@ -349,7 +349,7 @@ def test_opencode_verbose_parser_falls_back_deterministically_when_qualified_def
 def test_opencode_nonverbose_fallback_prefers_qualified_default_when_not_first() -> None:
     """The non-verbose ``opencode models`` fallback path must apply the same
     qualified-default preference as the verbose parser."""
-    from agent_relay_mcp.profiles.opencode import OPENCODE_DEFAULT_MODEL
+    from agent_crossbar.profiles.opencode import OPENCODE_DEFAULT_MODEL
 
     qualified_default = OPENCODE_DEFAULT_MODEL
     runner = FakeDiscoveryProcess(
@@ -468,7 +468,7 @@ def test_cache_last_good_preserved_on_write_failure(tmp_path: Path) -> None:
 
     # Patch _atomic_write to simulate a write failure, then verify last-good
     # is restored.  The original chmod trick was racy on macOS (owner override).
-    import agent_relay_mcp.model_cache as mc
+    import agent_crossbar.model_cache as mc
 
     _orig_atomic = mc._atomic_write
 
@@ -505,7 +505,7 @@ def test_cache_fetched_at_propagated(tmp_path: Path) -> None:
 def test_profile_health_codex_live_shape(tmp_path: Path) -> None:
     """profile_health for codex returns structured discovery data."""
     # Pre-populate cache; pin _get_cli_version so the cache key matches
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "0.145.0"
@@ -551,7 +551,7 @@ def test_profile_health_codex_live_shape(tmp_path: Path) -> None:
 
 def test_profile_health_claude_live_shape(tmp_path: Path) -> None:
     """Claude profile now supports live model discovery via /model picker."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "2.1.211"
@@ -624,7 +624,7 @@ def test_profile_health_chatgpt_pro_returns_honest_unavailable(tmp_path: Path) -
 def test_profile_health_opencode_live_shape(tmp_path: Path, monkeypatch) -> None:
     """profile_health for opencode returns structured discovery data."""
     monkeypatch.setattr(
-        "agent_relay_mcp.discovery._get_cli_version",
+        "agent_crossbar.discovery._get_cli_version",
         lambda _profile: "1.18.4",
     )
     data = {
@@ -653,7 +653,7 @@ def test_profile_health_opencode_live_shape(tmp_path: Path, monkeypatch) -> None
 
 def test_fresh_live_provenance(tmp_path: Path) -> None:
     """Fresh live fetch: cache_hit=False, stale=False, source=provider."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "0.145.0"
@@ -691,7 +691,7 @@ def test_fresh_live_provenance(tmp_path: Path) -> None:
 
 def test_fresh_cache_hit_provenance(tmp_path: Path) -> None:
     """Fresh TTL-valid cache: cache_hit=True, stale=False, source=provider."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "0.145.0"
@@ -742,10 +742,8 @@ def test_last_good_fallback_provenance(tmp_path: Path) -> None:
     }
 
     with (
-        patch(
-            "agent_relay_mcp.discovery.cache_get_or_fetch", return_value=(last_good_result, True)
-        ),
-        patch("agent_relay_mcp.discovery._get_cli_version", return_value="0.145.0"),
+        patch("agent_crossbar.discovery.cache_get_or_fetch", return_value=(last_good_result, True)),
+        patch("agent_crossbar.discovery._get_cli_version", return_value="0.145.0"),
     ):
         catalog = discover_profile_models(tmp_path, "codex")
         entry = build_profile_health_entry(tmp_path, "codex", catalog)
@@ -828,8 +826,8 @@ def test_discovery_profiles_set() -> None:
 
 def test_claude_discover_models_probe_error_returns_honest_empty() -> None:
     """Claude discover_models returns honest empty catalog on probe error."""
-    from agent_relay_mcp.adapters.claude import ClaudeAdapter
-    from agent_relay_mcp.adapters.claude_model_probe import ProbeResult
+    from agent_crossbar.adapters.claude import ClaudeAdapter
+    from agent_crossbar.adapters.claude_model_probe import ProbeResult
 
     class FakeProbe:
         def probe(self) -> ProbeResult:
@@ -846,8 +844,8 @@ def test_claude_discover_models_probe_error_returns_honest_empty() -> None:
 
 def test_claude_discover_models_auth_prompt_returns_empty() -> None:
     """Claude discover_models returns empty catalog on auth prompt (never fakes)."""
-    from agent_relay_mcp.adapters.claude import ClaudeAdapter
-    from agent_relay_mcp.adapters.claude_model_probe import ProbeResult
+    from agent_crossbar.adapters.claude import ClaudeAdapter
+    from agent_crossbar.adapters.claude_model_probe import ProbeResult
 
     class FakeProbe:
         def probe(self) -> ProbeResult:
@@ -870,8 +868,8 @@ def test_claude_discover_models_auth_prompt_returns_empty() -> None:
 def test_validation_rejects_effort_unsupported_by_model(tmp_path: Path) -> None:
     """validate_start_request rejects a codex job when the model doesn't support the effort."""
     # Pin _get_cli_version so the cache key matches
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "0.145.0"
@@ -920,7 +918,7 @@ def test_validation_rejects_effort_unsupported_by_model(tmp_path: Path) -> None:
 
 def test_validation_allows_effort_supported_by_model(tmp_path: Path) -> None:
     """validate_start_request allows a codex job when the model supports the effort."""
-    from agent_relay_mcp.validation import validate_start_request
+    from agent_crossbar.validation import validate_start_request
 
     data = {
         "models": ["gpt-5.6-sol", "gpt-5.6-terra"],
@@ -956,7 +954,7 @@ def test_validation_allows_effort_supported_by_model(tmp_path: Path) -> None:
 
 def test_validation_graceful_when_discovery_fails(tmp_path: Path) -> None:
     """When discovery fails (no cache), validation still passes for known efforts."""
-    from agent_relay_mcp.validation import validate_start_request
+    from agent_crossbar.validation import validate_start_request
 
     # No cache — discovery would try to spawn codex but fail
     # Validation should fall back to static effort list
@@ -1437,7 +1435,7 @@ def test_claude_discover_models_uses_cached_data_without_live_probe(tmp_path: Pa
     The live PTY probe is never run in unit tests — this verifies the
     cache path works correctly for claude.
     """
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "2.1.211"
@@ -1471,7 +1469,7 @@ def test_claude_discover_models_uses_cached_data_without_live_probe(tmp_path: Pa
 
 def test_opencode_verbose_parser_handles_multiple_json_blocks():
     """Parse opencode models --verbose output with multiple model+JSON blocks."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1500,7 +1498,7 @@ def test_opencode_verbose_parser_handles_multiple_json_blocks():
 
 def test_opencode_verbose_parser_handles_empty_variants():
     """Model with variants:{} should have empty supported_efforts."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = 'opencode-go/glm-5.2\n{"variants":{}}\n'
 
@@ -1515,7 +1513,7 @@ def test_opencode_verbose_parser_handles_empty_variants():
 
 def test_opencode_verbose_parser_handles_malformed_block():
     """Malformed JSON block should not crash; model still listed, no efforts."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1540,7 +1538,7 @@ def test_opencode_verbose_parser_handles_malformed_block():
 
 def test_opencode_verbose_parser_handles_max_effort():
     """Parse model with 'max' variant."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = 'opencode-go/glm-5.2\n{"variants":{"low":{},"medium":{},"high":{},"max":{}}}\n'
 
@@ -1559,7 +1557,7 @@ def test_opencode_verbose_parser_rejects_urls_as_models():
     objects containing ``"base_url": "https://api.openai.com/v1/..."``;
     every /-containing substring was grabbed as a model ID.
     """
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1591,7 +1589,7 @@ def test_opencode_verbose_parser_rejects_urls_as_models():
 
 def test_opencode_verbose_parser_handles_multiline_json_accumulation():
     """Multi-line pretty JSON must be accumulated until balanced braces."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1616,7 +1614,7 @@ def test_opencode_verbose_parser_filters_non_public_variant_keys():
 
     supported_efforts must only contain values from PUBLIC_EFFORTS = (low, medium, high, max).
     """
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         'opencode-go/glm-5.2\n{"variants":{"low":{},"medium":{},"xhigh":{},"turbo":{},"max":{}}}\n'
@@ -1637,7 +1635,7 @@ def test_opencode_verbose_parser_default_effort_is_none_unless_explicit():
     The old parser incorrectly used the first variant dict key as
     default_effort.  Order in a dict is not a default marker.
     """
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = 'opencode-go/glm-5.2\n{"variants":{"medium":{},"low":{},"high":{}}}\n'
 
@@ -1652,7 +1650,7 @@ def test_opencode_verbose_parser_default_effort_is_none_unless_explicit():
 def test_opencode_verbose_parser_handles_nested_braces_in_json():
     """JSON values with nested braces (dicts inside variants) must not confuse
     the brace-balanced accumulator."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1672,7 +1670,7 @@ def test_opencode_verbose_parser_handles_nested_braces_in_json():
 
 def test_opencode_verbose_parser_dedupes_duplicate_model_ids():
     """Duplicate model ID lines must only produce one ModelInfo, stable order."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1694,7 +1692,7 @@ def test_opencode_verbose_parser_dedupes_duplicate_model_ids():
 def test_opencode_verbose_parser_truncated_json_produces_error():
     """A truncated/malformed JSON block must produce an honest catalog error,
     not silently claim clean discovery."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1715,7 +1713,7 @@ def test_opencode_verbose_parser_truncated_json_produces_error():
 def test_opencode_verbose_parser_handles_model_without_json_block():
     """A model ID line followed by another model ID (no JSON) should still be
     listed with empty efforts."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = 'opencode-go/glm-5.2\nopencode-go/kimi-k2.7-code\n{"variants":{"medium":{}}}\n'
 
@@ -1735,7 +1733,7 @@ def test_opencode_verbose_parser_handles_model_without_json_block():
 
 def test_opencode_verbose_parser_accepts_nested_slash_ids():
     """Model IDs with nested slashes (provider/sub/model) must be accepted."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "google-vertex/deepseek-ai/deepseek-v3.1-maas\n"
@@ -1753,7 +1751,7 @@ def test_opencode_verbose_parser_accepts_nested_slash_ids():
 
 def test_opencode_verbose_parser_accepts_at_sign_in_id():
     """Model IDs with @ (e.g. version suffix) must be accepted."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         'google-vertex/claude-opus-4-8@default\n{"variants":{"medium":{},"high":{},"max":{}}}\n'
@@ -1769,7 +1767,7 @@ def test_opencode_verbose_parser_accepts_at_sign_in_id():
 
 def test_opencode_verbose_parser_accepts_tilde_prefix():
     """Model IDs with ~ prefix in a segment must be accepted."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = 'openrouter/~anthropic/claude-opus-latest\n{"variants":{"low":{},"high":{}}}\n'
 
@@ -1784,7 +1782,7 @@ def test_opencode_verbose_parser_accepts_tilde_prefix():
 def test_opencode_verbose_parser_synthetic_count_parity():
     """A synthetic list of diverse real-world IDs must achieve count parity
     (every valid ID line is captured, no false negatives)."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     ids = [
         "google-vertex/claude-opus-4-8@default",
@@ -1819,7 +1817,7 @@ def test_opencode_verbose_parser_synthetic_count_parity():
 def test_opencode_verbose_parser_still_rejects_urls_and_json():
     """Broadened regex must NOT regress: URLs (://) and JSON punctuation
     must still be rejected as model IDs."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1854,7 +1852,7 @@ def test_opencode_verbose_parser_still_rejects_urls_and_json():
 
 def test_opencode_verbose_parser_accepts_colon_tags():
     """parse_opencode_verbose_output must accept model IDs with colon tags (:free, :thinking)."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "openrouter/cohere/north-mini-code:free\n"
@@ -1875,7 +1873,7 @@ def test_opencode_verbose_parser_accepts_colon_tags():
 
 def test_opencode_verbose_parser_still_rejects_url_bare_lines():
     """Even with : in the regex, bare URL lines must not be treated as model IDs."""
-    from agent_relay_mcp.adapters.opencode import parse_opencode_verbose_output
+    from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
 
     output = (
         "opencode-go/glm-5.2\n"
@@ -1897,7 +1895,7 @@ def test_opencode_verbose_parser_still_rejects_url_bare_lines():
 
 def test_claude_help_effort_parser_extracts_public_values():
     """Bounded parse of claude --help extracts effort values."""
-    from agent_relay_mcp.adapters.claude import parse_claude_help_efforts
+    from agent_crossbar.adapters.claude import parse_claude_help_efforts
 
     help_output = (
         "Usage: claude [options] [prompt]\n"
@@ -1911,7 +1909,7 @@ def test_claude_help_effort_parser_extracts_public_values():
 
 def test_claude_help_effort_parser_excludes_non_public():
     """Bounded parse excludes xhigh from public efforts."""
-    from agent_relay_mcp.adapters.claude import parse_claude_help_efforts
+    from agent_crossbar.adapters.claude import parse_claude_help_efforts
 
     help_output = (
         "Usage: claude [options] [prompt]\n"
@@ -1925,7 +1923,7 @@ def test_claude_help_effort_parser_excludes_non_public():
 
 def test_claude_help_effort_parser_no_match_returns_empty():
     """When --effort line is not found, return empty tuple."""
-    from agent_relay_mcp.adapters.claude import parse_claude_help_efforts
+    from agent_crossbar.adapters.claude import parse_claude_help_efforts
 
     help_output = "Usage: claude [options]\n  --model <model>\n"
 
@@ -1944,7 +1942,7 @@ def test_claude_help_effort_parser_handles_wrapped_help_line():
     The regex must match across the line break and exclude xhigh from
     public values.
     """
-    from agent_relay_mcp.adapters.claude import parse_claude_help_efforts
+    from agent_crossbar.adapters.claude import parse_claude_help_efforts
 
     help_output = (
         "Usage: claude [options] [prompt]\n"
@@ -2005,8 +2003,8 @@ def _make_catalog(
 
 def test_opencode_validation_rejects_unsupported_effort(tmp_path):
     """validate_start_request rejects opencode job when model doesn't support effort."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(
         models=["opencode-go/glm-5.2", "opencode-go/kimi-k2.7-code"],
@@ -2047,8 +2045,8 @@ def test_opencode_validation_rejects_unsupported_effort(tmp_path):
 
 def test_opencode_validation_allows_supported_effort(tmp_path):
     """validate_start_request allows opencode job when model supports effort."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(
         models=["opencode-go/glm-5.2"],
@@ -2082,8 +2080,8 @@ def test_opencode_validation_allows_supported_effort(tmp_path):
 
 def test_codex_max_effort_resolves_to_strongest_from_cache(tmp_path):
     """Codex max effort resolves to strongest native effort from cached catalog."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "0.145.0"
@@ -2132,8 +2130,8 @@ def test_opencode_validate_effort_rejects_empty_supported_efforts():
     No advertised variant means effort cannot be proven or mapped —
     validate_effort_for_model must not silently allow.
     """
-    from agent_relay_mcp.adapters.base import ModelCatalog, ModelInfo
-    from agent_relay_mcp.adapters.opencode import adapter as opencode_adapter
+    from agent_crossbar.adapters.base import ModelCatalog, ModelInfo
+    from agent_crossbar.adapters.opencode import adapter as opencode_adapter
 
     catalog = ModelCatalog(
         models=("opencode-go/glm-5.2",),
@@ -2153,8 +2151,8 @@ def test_opencode_validate_effort_rejects_empty_supported_efforts():
 def test_opencode_validate_effort_rejects_on_catalog_error():
     """When catalog carries an error, effort validation must produce a distinct
     discovery/preflight error, not silently allow."""
-    from agent_relay_mcp.adapters.base import ModelCatalog
-    from agent_relay_mcp.adapters.opencode import adapter as opencode_adapter
+    from agent_crossbar.adapters.base import ModelCatalog
+    from agent_crossbar.adapters.opencode import adapter as opencode_adapter
 
     catalog = ModelCatalog(
         models=(),
@@ -2172,8 +2170,8 @@ def test_opencode_validate_effort_rejects_on_catalog_error():
 def test_opencode_validate_effort_rejects_when_no_model_info():
     """When catalog has no model_info at all (but model is listed in models),
     effort cannot be validated — must reject."""
-    from agent_relay_mcp.adapters.base import ModelCatalog
-    from agent_relay_mcp.adapters.opencode import adapter as opencode_adapter
+    from agent_crossbar.adapters.base import ModelCatalog
+    from agent_crossbar.adapters.opencode import adapter as opencode_adapter
 
     catalog = ModelCatalog(
         models=("opencode-go/glm-5.2",),
@@ -2194,8 +2192,8 @@ def test_opencode_validate_effort_rejects_when_no_model_info():
 def test_opencode_validation_accepts_catalog_model_not_in_static_list(tmp_path):
     """A model discovered via live catalog (not in the static OPENCODE_MODELS list)
     must be accepted.  The static list is not authoritative — the live CLI is."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(
         models=["opencode-go/new-hotness-v1", "opencode-go/glm-5.2"],
@@ -2222,8 +2220,8 @@ def test_opencode_validation_accepts_catalog_model_not_in_static_list(tmp_path):
 
 def test_opencode_validation_defaults_to_catalog_default_model(tmp_path):
     """When no model is requested, default to catalog.default_model (not static OPENCODE_DEFAULT_MODEL)."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(
         models=["opencode-go/kimi-k2.7-code", "opencode-go/glm-5.2"],
@@ -2250,8 +2248,8 @@ def test_opencode_validation_defaults_to_catalog_default_model(tmp_path):
 def test_opencode_validation_fails_preflight_on_discovery_error(tmp_path):
     """When catalog discovery fails (error field set), validation must fail
     preflight with a stable structured error — no job created."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(
         models=[],
@@ -2279,8 +2277,8 @@ def test_opencode_validation_fails_preflight_on_discovery_error(tmp_path):
 
 def test_opencode_validation_fails_preflight_on_empty_catalog(tmp_path):
     """When catalog has no models (empty list), validation must fail preflight."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(models=[], default_model=None, model_info=[])
 
@@ -2306,8 +2304,8 @@ def test_opencode_validation_fails_preflight_on_empty_catalog(tmp_path):
 def test_opencode_preflight_discovers_on_first_call(tmp_path):
     """First call with no cache must trigger discovery via discover_profile_models
     and use the returned catalog for model resolution."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(
         models=["google-vertex/claude-opus-4-8@default", "opencode-go/glm-5.2"],
@@ -2339,8 +2337,8 @@ def test_opencode_preflight_discovers_on_first_call(tmp_path):
 def test_opencode_preflight_uses_cache_path(tmp_path):
     """When cache is fresh, discover_profile_models returns cache_hit=True.
     Validation must still resolve models correctly from cached data."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(
         models=["opencode-go/glm-5.2", "opencode-go/kimi-k2.7-code"],
@@ -2368,8 +2366,8 @@ def test_opencode_preflight_uses_cache_path(tmp_path):
 def test_opencode_preflight_fails_on_discovery_exception(tmp_path):
     """When discover_profile_models raises an exception, validation must fail
     preflight — no job created, no fallback to static allowlist."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     with patch.object(
         _disc, "discover_profile_models", side_effect=RuntimeError("opencode CLI not found")
@@ -2394,7 +2392,7 @@ def test_opencode_preflight_fails_on_discovery_exception(tmp_path):
 def test_opencode_preflight_fails_on_missing_state_root():
     """When state_root is None, opencode preflight must fail immediately
     — no discovery attempt at all."""
-    from agent_relay_mcp.validation import validate_start_request
+    from agent_crossbar.validation import validate_start_request
 
     req = {
         "operation": "review",
@@ -2422,8 +2420,8 @@ def test_opencode_preflight_no_static_fallback():
     """
     from pathlib import Path
 
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.validation import validate_start_request
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.validation import validate_start_request
 
     catalog = _make_catalog(models=[], default_model=None, model_info=[])
 
@@ -2451,7 +2449,7 @@ def test_opencode_preflight_no_static_fallback():
 def test_cached_models_for_listing_invokes_discovery_on_clean_cache(tmp_path: Path) -> None:
     """A clean cache (no prior discovery) must attempt real discover_profile_models —
     profiles_list never silently skips discovery just because there's no cache yet."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     catalog = ModelCatalog(
         models=("gpt-live-1", "gpt-live-2"),
@@ -2470,7 +2468,7 @@ def test_cached_models_for_listing_invokes_discovery_on_clean_cache(tmp_path: Pa
 
 def test_cached_models_for_listing_falls_back_when_probe_fails(tmp_path: Path) -> None:
     """A failed live probe (no cache to fall back on either) → static fallback, never empty."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     def _boom(state_root, profile, *, refresh=False):
         raise RuntimeError("no live cli available")
@@ -2485,7 +2483,7 @@ def test_cached_models_for_listing_falls_back_when_probe_fails(tmp_path: Path) -
 
 def test_cached_models_for_listing_uses_fresh_cache(tmp_path: Path) -> None:
     """A fresh, matching-version cache overrides the static fallback."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "0.999.0"
@@ -2511,7 +2509,7 @@ def test_cached_models_for_listing_uses_fresh_cache(tmp_path: Path) -> None:
 
 def test_cached_models_for_listing_falls_back_on_cached_error(tmp_path: Path) -> None:
     """A cached entry that itself carries a discovery error is not surfaced as usable models."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     _orig_version = _disc._get_cli_version
     _disc._get_cli_version = lambda p: "0.999.0"
@@ -2543,7 +2541,7 @@ def test_cached_models_for_listing_ignores_non_discovery_profiles(tmp_path: Path
 def test_live_profile_registry_overlays_discovered_models(tmp_path: Path) -> None:
     """live_profile_registry overlays discovered models onto the static registry
     without adding or removing any entry keys."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     def _fake_discover(state_root, profile, *, refresh=False):
         if profile == "opencode":
@@ -2561,7 +2559,7 @@ def test_live_profile_registry_overlays_discovered_models(tmp_path: Path) -> Non
     assert registry["opencode"]["models"] == ["opencode-go/live-model"]
     assert registry["opencode"]["default_model"] == "opencode-go/live-model"
     # codex/claude probes failed → static fallback preserved
-    from agent_relay_mcp.profiles import profile_registry
+    from agent_crossbar.profiles import profile_registry
 
     static = profile_registry()
     assert registry["codex"]["models"] == static["codex"]["models"]
@@ -2583,8 +2581,8 @@ def test_live_profile_registry_overlays_discovered_models(tmp_path: Path) -> Non
 
 def test_live_profile_registry_falls_back_when_discovery_fails(tmp_path: Path) -> None:
     """When every live probe fails, live_profile_registry matches the static registry."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.profiles import profile_registry
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.profiles import profile_registry
 
     with patch.object(_disc, "discover_profile_models", side_effect=RuntimeError("boom")):
         registry = live_profile_registry(tmp_path)
@@ -2634,7 +2632,7 @@ def test_cached_profile_health_entry_uses_any_cache_even_stale(tmp_path: Path) -
 
 def test_cached_profile_health_entry_never_spawns_subprocess_for_discovery(tmp_path: Path) -> None:
     """cached_profile_health_entry must never invoke the live discovery fetchers."""
-    import agent_relay_mcp.discovery as _disc
+    import agent_crossbar.discovery as _disc
 
     def _boom(*args, **kwargs):
         raise AssertionError("cached_profile_health_entry must not call discover_profile_models")
@@ -2657,8 +2655,8 @@ def test_cached_profile_health_entry_reasonix_honest_unavailable(tmp_path: Path)
 def test_cached_models_for_listing_records_diagnostic_on_exception(tmp_path: Path) -> None:
     """A live-discovery exception must be preserved as a sanitized diagnostic,
     not just silently swallowed in favor of the static fallback."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
 
@@ -2678,8 +2676,8 @@ def test_cached_models_for_listing_records_diagnostic_on_exception(tmp_path: Pat
 
 def test_cached_models_for_listing_records_diagnostic_on_catalog_error(tmp_path: Path) -> None:
     """A catalog carrying a discovery error must also be preserved as a diagnostic."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
 
@@ -2701,8 +2699,8 @@ def test_cached_models_for_listing_records_diagnostic_on_catalog_error(tmp_path:
 def test_cached_models_for_listing_sanitizes_secret_in_diagnostic(tmp_path: Path) -> None:
     """A secret-shaped string in a discovery exception must not survive into the
     stored diagnostic — the diagnostic is surfaced via profile_health."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
 
@@ -2719,8 +2717,8 @@ def test_cached_models_for_listing_sanitizes_secret_in_diagnostic(tmp_path: Path
 
 def test_cached_models_for_listing_clears_diagnostic_on_success(tmp_path: Path) -> None:
     """A subsequent successful discovery must clear the previously recorded failure."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
     discovery_diagnostics.record("codex", "stale failure")
@@ -2743,7 +2741,7 @@ def test_cached_profile_health_entry_surfaces_last_discovery_diagnostic(
     """profile_health (via cached_profile_health_entry) must surface the last
     recorded discovery diagnostic when there is no cache at all, instead of
     the uninformative generic 'no cached discovery yet' message alone."""
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
     discovery_diagnostics.record("codex", "codex crashed: connection refused")
@@ -2761,8 +2759,8 @@ def test_cached_profile_health_entry_never_spawns_subprocess_when_reading_diagno
     tmp_path: Path,
 ) -> None:
     """Surfacing the stored diagnostic must not trigger a live discovery probe."""
-    import agent_relay_mcp.discovery as _disc
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    import agent_crossbar.discovery as _disc
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
     discovery_diagnostics.record("codex", "some prior failure")
@@ -2783,7 +2781,7 @@ def test_cached_profile_health_entry_prefers_newer_diagnostic_over_stale_cache_e
     """A good cache with no error must not hide a *later* recorded discovery
     failure behind stale ``data["error"]`` (which is ``None`` here) — when a
     newer diagnostic exists, it must win and the entry must be marked stale."""
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
     write_cache(
@@ -2813,7 +2811,7 @@ def test_discovery_diagnostics_thread_safe_concurrent_record_and_get() -> None:
     (live_profile_registry probes profiles concurrently via a thread pool)."""
     from concurrent.futures import ThreadPoolExecutor
 
-    from agent_relay_mcp.discovery import discovery_diagnostics
+    from agent_crossbar.discovery import discovery_diagnostics
 
     discovery_diagnostics.clear()
     profiles = [f"profile-{i}" for i in range(20)]

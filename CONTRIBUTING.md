@@ -1,12 +1,12 @@
-# Contributing to Agent Relay MCP
+# Contributing to Agent Crossbar
 
-Thanks for your interest! Agent Relay MCP is an experimental developer preview.
+Thanks for your interest! Agent Crossbar is an experimental developer preview.
 
 ## Development Environment
 
 ```bash
-git clone https://github.com/zombopanda/agent-relay-mcp
-cd agent-relay-mcp
+git clone https://github.com/zombopanda/agent-crossbar
+cd agent-crossbar
 uv sync --extra test
 ```
 
@@ -47,4 +47,4 @@ Maintainers trigger releases via signed tag → PyPI trusted publishing. See `.g
 
 ## Compatibility
 
-Agent Relay MCP follows an experimental-preview compatibility policy. Patch versions (0.1.x) preserve stable error codes and tool signatures. Minor versions may change APIs.
+Agent Crossbar follows an experimental-preview compatibility policy. Patch versions (0.1.x) preserve stable error codes and tool signatures. Minor versions may change APIs.

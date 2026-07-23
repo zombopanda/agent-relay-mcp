@@ -196,7 +196,7 @@ def discover_codex_models(
             "initialize",
             next_request_id,
             {
-                "clientInfo": {"name": "agent-relay-mcp", "version": "0.1.0"},
+                "clientInfo": {"name": "agent-crossbar", "version": "0.1.0"},
                 "capabilities": {},
             },
         )

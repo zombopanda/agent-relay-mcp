@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from agent_relay_mcp.tmux_output import (
+from agent_crossbar.tmux_output import (
     interactive_tmux_output_complete,
     interactive_tmux_output_summary,
     interactive_tmux_session_resumed,
@@ -140,7 +140,7 @@ class JobStore:
 
     def __init__(self, state_root: str | Path | None = None) -> None:
         if state_root is None:
-            state_root = Path.home() / ".local" / "state" / "agent-relay-mcp"
+            state_root = Path.home() / ".local" / "state" / "agent-crossbar"
         self.state_root = Path(state_root)
         self._known_ids: set[str] = set()
         self._lock = threading.Lock()

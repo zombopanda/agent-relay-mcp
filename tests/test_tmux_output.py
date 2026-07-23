@@ -1,6 +1,6 @@
 import pytest
 
-from agent_relay_mcp.tmux_output import (
+from agent_crossbar.tmux_output import (
     interactive_tmux_output_complete,
     interactive_tmux_output_summary,
 )

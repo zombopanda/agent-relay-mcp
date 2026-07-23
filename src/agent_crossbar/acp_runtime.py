@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from agent_relay_mcp.acp_client import (
+from agent_crossbar.acp_client import (
     AcpError,
     AcpLaunchError,
     AcpProtocolError,
@@ -11,8 +11,8 @@ from agent_relay_mcp.acp_client import (
     AcpTimeoutError,
     run_acp_prompt,
 )
-from agent_relay_mcp.envelope import build_result_envelope, sanitize_diagnostic_text
-from agent_relay_mcp.models import Autonomy
+from agent_crossbar.envelope import build_result_envelope, sanitize_diagnostic_text
+from agent_crossbar.models import Autonomy
 
 DEFAULT_MAX_RUNTIME_SEC: int = 1800
 

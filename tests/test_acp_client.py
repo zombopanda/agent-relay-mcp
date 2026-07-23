@@ -18,7 +18,7 @@ from acp.schema import (
     ToolCallUpdate,
 )
 
-from agent_relay_mcp.acp_client import (
+from agent_crossbar.acp_client import (
     AcpLaunchError,
     AcpProtocolError,
     AcpResult,
@@ -26,7 +26,7 @@ from agent_relay_mcp.acp_client import (
     _OneShotClient,
     run_acp_prompt,
 )
-from agent_relay_mcp.models import Autonomy
+from agent_crossbar.models import Autonomy
 
 # --- helpers -----------------------------------------------------------
 
@@ -237,7 +237,7 @@ def test_run_acp_prompt_success():
     conn = _Conn(texts=["hello ", "world"], stop_reason="end_turn", session_id="session-42")
     state = {}
     with mock.patch(
-        "agent_relay_mcp.acp_client.spawn_agent_process",
+        "agent_crossbar.acp_client.spawn_agent_process",
         _spawn(conn, state),
     ):
         result = _run(
@@ -260,7 +260,7 @@ def test_invalid_autonomy_no_spawn():
     secret = "TOP-SECRET"
     spawn_mock = mock.MagicMock()
     with mock.patch(
-        "agent_relay_mcp.acp_client.spawn_agent_process",
+        "agent_crossbar.acp_client.spawn_agent_process",
         spawn_mock,
     ):
         with pytest.raises(AcpProtocolError) as exc:
@@ -289,7 +289,7 @@ def test_launch_error_maps():
         yield
 
     with mock.patch(
-        "agent_relay_mcp.acp_client.spawn_agent_process",
+        "agent_crossbar.acp_client.spawn_agent_process",
         _missing,
     ):
         with pytest.raises(AcpLaunchError) as exc:
@@ -310,7 +310,7 @@ def test_protocol_error_maps():
     state = {}
     conn = _Conn(protocol_error=RuntimeError("handshake failed"))
     with mock.patch(
-        "agent_relay_mcp.acp_client.spawn_agent_process",
+        "agent_crossbar.acp_client.spawn_agent_process",
         _spawn(conn, state),
     ):
         with pytest.raises(AcpProtocolError) as exc:
@@ -336,7 +336,7 @@ def test_protocol_error_after_prompt_dispatch_marks_execution_stage():
     state = {}
     conn = _Conn(protocol_error_after_prompt=RuntimeError("stream corrupted"))
     with mock.patch(
-        "agent_relay_mcp.acp_client.spawn_agent_process",
+        "agent_crossbar.acp_client.spawn_agent_process",
         _spawn(conn, state),
     ):
         with pytest.raises(AcpProtocolError) as exc:
@@ -358,7 +358,7 @@ def test_timeout_cleanup():
     state = {}
     conn = _Conn(hang=True)
     with mock.patch(
-        "agent_relay_mcp.acp_client.spawn_agent_process",
+        "agent_crossbar.acp_client.spawn_agent_process",
         _spawn(conn, state),
     ):
         with pytest.raises(AcpTimeoutError) as exc:
@@ -387,7 +387,7 @@ def test_timeout_before_prompt_sent_marks_prompt_delivery_stage():
     state = {}
     conn = _Conn(hang_before_prompt=True)
     with mock.patch(
-        "agent_relay_mcp.acp_client.spawn_agent_process",
+        "agent_crossbar.acp_client.spawn_agent_process",
         _spawn(conn, state),
     ):
         with pytest.raises(AcpTimeoutError) as exc:
@@ -548,7 +548,7 @@ class TestRunAcpPromptModelSelection:
         model_opt = _config_with_category(values=["opencode-go/deepseek-v4-flash"])
         conn = _ConnWithConfig(config_options=[model_opt])
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             result = _run(
@@ -578,7 +578,7 @@ class TestRunAcpPromptModelSelection:
         )
         conn = _ConnWithConfig(config_options=[other_opt, model_opt])
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             result = _run(
@@ -606,7 +606,7 @@ class TestRunAcpPromptModelSelection:
         )
         conn = _ConnWithConfig(config_options=[model_opt])
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             result = _run(
@@ -633,7 +633,7 @@ class TestRunAcpPromptModelSelection:
         )
         conn = _ConnWithConfig(config_options=[model_opt])
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             result = _run(
@@ -653,7 +653,7 @@ class TestRunAcpPromptModelSelection:
         """No config option with category==model or id==model -> AcpProtocolError."""
         conn = _ConnWithConfig(config_options=[])
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             with pytest.raises(AcpProtocolError, match="No model config option available") as exc:
@@ -675,7 +675,7 @@ class TestRunAcpPromptModelSelection:
         )
         conn = _ConnWithConfig(config_options=[model_opt])
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             with pytest.raises(AcpProtocolError, match="Requested model.*not available") as exc:
@@ -700,7 +700,7 @@ class TestRunAcpPromptModelSelection:
             set_config_error=RuntimeError("connection lost"),
         )
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             with pytest.raises(AcpProtocolError, match="Failed to set model config") as exc:
@@ -730,7 +730,7 @@ class TestRunAcpPromptModelSelection:
             set_config_response_options=[model_opt],
         )
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             with pytest.raises(AcpProtocolError, match="Agent rejected model") as exc:
@@ -755,7 +755,7 @@ class TestRunAcpPromptModelSelection:
             set_config_response_options=[],  # empty — no model option in response
         )
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             with pytest.raises(AcpProtocolError, match="Agent rejected model") as exc:
@@ -785,7 +785,7 @@ class TestRunAcpPromptModelSelection:
             set_config_error=RuntimeError(secret),
         )
         with mock.patch(
-            "agent_relay_mcp.acp_client.spawn_agent_process",
+            "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
             with pytest.raises(AcpProtocolError) as exc_info:
@@ -809,8 +809,8 @@ class TestRunAcpPromptModelSelection:
 class TestRunAcpJobForwardsModel:
     def test_model_passed_to_run_acp_prompt(self, tmp_path):
         """run_acp_job forwards model to run_acp_prompt."""
-        from agent_relay_mcp.acp_runtime import run_acp_job
-        from agent_relay_mcp.jobs import JobStore
+        from agent_crossbar.acp_runtime import run_acp_job
+        from agent_crossbar.jobs import JobStore
 
         store = JobStore(tmp_path)
         job = store.create_job(
@@ -818,7 +818,7 @@ class TestRunAcpJobForwardsModel:
         )
 
         with mock.patch(
-            "agent_relay_mcp.acp_runtime.run_acp_prompt",
+            "agent_crossbar.acp_runtime.run_acp_prompt",
             new=AsyncMock(
                 return_value=AcpResult(output="ok", stop_reason="end_turn", session_id="s1")
             ),

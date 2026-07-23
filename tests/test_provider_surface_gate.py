@@ -440,12 +440,12 @@ def test_server_params_launches_agents_mcp_entrypoint_from_same_venv(monkeypatch
 
 
 def test_server_params_args_are_empty_not_module_flag():
-    """No -m agent_relay_mcp.server — uses the real installed entrypoint."""
+    """No -m agent_crossbar.server — uses the real installed entrypoint."""
     params = gate._server_params(env={})
 
     assert params.args == []
     assert "-m" not in params.args
-    assert "agent_relay_mcp.server" not in params.args
+    assert "agent_crossbar.server" not in params.args
 
 
 # ── Claude sentinel: reject prompt echo, accept distinct answer ────────────

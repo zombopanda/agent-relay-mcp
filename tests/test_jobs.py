@@ -1,5 +1,5 @@
-import agent_relay_mcp.jobs as jobs_module
-from agent_relay_mcp.jobs import JobStore
+import agent_crossbar.jobs as jobs_module
+from agent_crossbar.jobs import JobStore
 
 
 def test_job_dir_permissions_and_path(tmp_path):
@@ -589,7 +589,7 @@ def test_create_job_hardens_preexisting_dir_permissions(tmp_path):
 
 def test_send_user_input_tmux_uses_enter_not_c_m(monkeypatch, tmp_path):
     """Regression: send_user_input must use Enter, not C-m, for Reasonix TUI."""
-    from agent_relay_mcp.jobs import JobStore
+    from agent_crossbar.jobs import JobStore
 
     captured = []
 
@@ -597,7 +597,7 @@ def test_send_user_input_tmux_uses_enter_not_c_m(monkeypatch, tmp_path):
         captured.append(args)
         return type("R", (), {"returncode": 0})()
 
-    monkeypatch.setattr("agent_relay_mcp.jobs.subprocess.run", fake_run)
+    monkeypatch.setattr("agent_crossbar.jobs.subprocess.run", fake_run)
 
     store = JobStore(tmp_path)
     job = store.create_job(profile="reasonix", operation="advice", transport="tmux")
@@ -612,7 +612,7 @@ def test_send_user_input_tmux_uses_enter_not_c_m(monkeypatch, tmp_path):
 
 def test_send_user_input_tmux_settles_between_text_and_enter(monkeypatch, tmp_path):
     """Regression: send_user_input must sleep 0.5s between -l text and Enter."""
-    from agent_relay_mcp.jobs import JobStore
+    from agent_crossbar.jobs import JobStore
 
     captured = []
 
@@ -620,7 +620,7 @@ def test_send_user_input_tmux_settles_between_text_and_enter(monkeypatch, tmp_pa
         captured.append(args)
         return type("R", (), {"returncode": 0})()
 
-    monkeypatch.setattr("agent_relay_mcp.jobs.subprocess.run", fake_run)
+    monkeypatch.setattr("agent_crossbar.jobs.subprocess.run", fake_run)
 
     sleep_calls = []
 

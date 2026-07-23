@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from agent_relay_mcp.models import Autonomy, Operation, Sensitivity, Transport
-from agent_relay_mcp.profiles import (
+from agent_crossbar.models import Autonomy, Operation, Sensitivity, Transport
+from agent_crossbar.profiles import (
     CODEX_DEFAULT_EFFORT,
     CODEX_DEFAULT_MODEL,
     CODEX_EFFORT_ALIASES,
@@ -189,8 +189,8 @@ def validate_start_request(
 
         # Rule: Codex effort must be supported by the selected model's discovered capabilities.
         if state_root is not None:
-            from agent_relay_mcp.adapters.codex import adapter as codex_adapter
-            from agent_relay_mcp.discovery import discover_profile_models
+            from agent_crossbar.adapters.codex import adapter as codex_adapter
+            from agent_crossbar.discovery import discover_profile_models
 
             try:
                 catalog = discover_profile_models(
@@ -210,8 +210,8 @@ def validate_start_request(
         if state_root is None:
             return fail("discovery_error", "state_root is required for OpenCode model discovery")
 
-        from agent_relay_mcp.adapters.opencode import adapter as opencode_adapter
-        from agent_relay_mcp.discovery import discover_profile_models
+        from agent_crossbar.adapters.opencode import adapter as opencode_adapter
+        from agent_crossbar.discovery import discover_profile_models
 
         sr = Path(state_root) if not isinstance(state_root, Path) else state_root
 

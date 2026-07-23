@@ -12,11 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_relay_mcp.adapters.claude import (
+from agent_crossbar.adapters.claude import (
     RunResult,
 )
-from agent_relay_mcp.jobs import JobStore
-from agent_relay_mcp.server import agent_start, job_send, job_stop
+from agent_crossbar.jobs import JobStore
+from agent_crossbar.server import agent_start, job_send, job_stop
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -102,9 +102,9 @@ def claude_state_root(tmp_path: Path, monkeypatch) -> Path:
     """
     state_root = tmp_path / "agent-harness-state"
     state_root.mkdir()
-    monkeypatch.setenv("AGENT_RELAY_STATE_DIR", str(state_root))
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(state_root))
     monkeypatch.setattr(
-        "agent_relay_mcp.readiness.probe_profile",
+        "agent_crossbar.readiness.probe_profile",
         lambda *args, **kwargs: SimpleNamespace(
             state="ready",
             error_code=None,
@@ -125,11 +125,11 @@ def suppress_background_monitor(monkeypatch):
         pass
 
     monkeypatch.setattr(
-        "agent_relay_mcp.server.start_agent_job",
+        "agent_crossbar.server.start_agent_job",
         _noop,
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.agent_runner.start_agent_job",
+        "agent_crossbar.agent_runner.start_agent_job",
         _noop,
     )
 
@@ -146,21 +146,21 @@ def test_agent_start_claude_uses_adapter_not_legacy_providers(
     runner = FakeRunner([_auth_ok(), _launch_ok("abc12345")])
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
     # Prevent any legacy runner from launching real processes
     monkeypatch.setattr(
-        "agent_relay_mcp.server.start_print_job",
+        "agent_crossbar.server.start_print_job",
         lambda *a, **kw: pytest.fail("legacy start_print_job called"),
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.server.start_tmux_job",
+        "agent_crossbar.server.start_tmux_job",
         lambda *a, **kw: pytest.fail("legacy start_tmux_job called"),
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.server.start_gui_job",
+        "agent_crossbar.server.start_gui_job",
         lambda *a, **kw: pytest.fail("legacy start_gui_job called"),
     )
 
@@ -214,7 +214,7 @@ def test_readiness_failure_creates_no_job_directory(
     )
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
@@ -248,7 +248,7 @@ def test_launch_stores_native_session_ids_and_resolved_settings(
     runner = FakeRunner([_auth_ok(), _launch_ok("deadbeef")])
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
@@ -306,11 +306,11 @@ def test_monitor_polls_status_until_done_and_normalizes_result(
     )
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -324,7 +324,7 @@ def test_monitor_polls_status_until_done_and_normalizes_result(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
 
@@ -355,11 +355,11 @@ def test_monitor_detects_blocked_as_failure_for_non_interactive_jobs(
     )
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -373,7 +373,7 @@ def test_monitor_detects_blocked_as_failure_for_non_interactive_jobs(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
 
@@ -407,7 +407,7 @@ def test_job_stop_calls_adapter_cancel_for_claude_bg_jobs(
     )
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
@@ -466,7 +466,7 @@ def test_job_send_rejects_claude_bg_job(
     runner = FakeRunner([_auth_ok(), _launch_ok("feedface")])
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
@@ -513,10 +513,10 @@ def test_monitor_maps_done_to_completed_envelope(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -529,7 +529,7 @@ def test_monitor_maps_done_to_completed_envelope(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
     monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
@@ -555,10 +555,10 @@ def test_monitor_maps_failed_to_failed_with_failure_block(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -571,7 +571,7 @@ def test_monitor_maps_failed_to_failed_with_failure_block(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
     monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
@@ -598,10 +598,10 @@ def test_monitor_maps_stopped_to_cancelled(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -614,7 +614,7 @@ def test_monitor_maps_stopped_to_cancelled(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
     monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
@@ -642,10 +642,10 @@ def test_monitor_blocked_noninteractive_produces_execution_failure(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -658,7 +658,7 @@ def test_monitor_blocked_noninteractive_produces_execution_failure(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
     monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
@@ -694,10 +694,10 @@ def test_monitor_claude_limit_is_actionable_and_never_returns_raw_tui(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -707,7 +707,7 @@ def test_monitor_claude_limit_is_actionable_and_never_returns_raw_tui(
         client_name="test",
     )
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     monitor_agent_job(
         store,
@@ -740,10 +740,10 @@ def test_monitor_claude_missing_login_is_auth_failure(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -753,7 +753,7 @@ def test_monitor_claude_missing_login_is_auth_failure(
         client_name="test",
     )
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     monitor_agent_job(
         store,
@@ -778,7 +778,7 @@ def test_monitor_runtime_deadline_produces_execution_failure_with_timeout_layer(
     claude_state_root: Path, monkeypatch, suppress_background_monitor
 ):
     """Runtime deadline exceeded must produce stage=execution code=max_runtime_exceeded."""
-    from agent_relay_mcp.agent_runner import _run_adapter_job
+    from agent_crossbar.agent_runner import _run_adapter_job
 
     # Create job manually since server validation rejects max_runtime_sec=0
     store = JobStore(claude_state_root)
@@ -804,7 +804,7 @@ def test_monitor_runtime_deadline_produces_execution_failure_with_timeout_layer(
             "created": "2025-01-01T00:00:00Z",
         },
     )
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
 
@@ -851,13 +851,13 @@ def test_monitor_finalization_exception_produces_finalization_failure(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
 
     # Make adapter.status raise after the first call
     original_status = (
-        __import__("agent_relay_mcp.adapters.claude", fromlist=["ClaudeAdapter"])
+        __import__("agent_crossbar.adapters.claude", fromlist=["ClaudeAdapter"])
         .ClaudeAdapter()
         .status
     )
@@ -871,11 +871,11 @@ def test_monitor_finalization_exception_produces_finalization_failure(
         return original_status(runner_arg, session_id)
 
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.ClaudeAdapter.status",
+        "agent_crossbar.adapters.claude.ClaudeAdapter.status",
         exploding_status,
     )
 
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -888,7 +888,7 @@ def test_monitor_finalization_exception_produces_finalization_failure(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
     monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
@@ -924,10 +924,10 @@ def test_monitor_persists_full_session_id_on_every_poll_not_only_terminal(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -940,7 +940,7 @@ def test_monitor_persists_full_session_id_on_every_poll_not_only_terminal(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
     monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)
@@ -970,10 +970,10 @@ def test_monitor_failure_diagnostics_bounded_and_no_secrets(
         ]
     )
     monkeypatch.setattr(
-        "agent_relay_mcp.adapters.claude.LocalSubprocessRunner.run",
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
         runner.run,
     )
-    from agent_relay_mcp.agent_runner import monitor_agent_job
+    from agent_crossbar.agent_runner import monitor_agent_job
 
     result = agent_start(
         profile="claude",
@@ -986,7 +986,7 @@ def test_monitor_failure_diagnostics_bounded_and_no_secrets(
     job_id = result["job_id"]
 
     store = JobStore(claude_state_root)
-    import agent_relay_mcp.adapters.registry as reg
+    import agent_crossbar.adapters.registry as reg
 
     adapter = reg.get_adapter("claude")
     monitor_agent_job(store, job_id, adapter, poll_interval_sec=0.01)

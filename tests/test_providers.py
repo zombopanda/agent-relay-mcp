@@ -1,7 +1,7 @@
 """Provider launch plan tests for the agent harness MCP."""
 
-from agent_relay_mcp.profiles import profile_registry
-from agent_relay_mcp.providers import build_launch_plan
+from agent_crossbar.profiles import profile_registry
+from agent_crossbar.providers import build_launch_plan
 
 INTERACTIVE_TMUX_DEV_PROFILES = ["reasonix", "codex", "claude"]
 TMUX_DEV_PROFILES = ["reasonix", "codex", "claude", "opencode"]

@@ -1,6 +1,6 @@
 """Policy validation tests for Task 3: Secret Rules, Budget Rules, Full Local Validation."""
 
-from agent_relay_mcp.validation import validate_start_request
+from agent_crossbar.validation import validate_start_request
 
 
 def _base_request(profile: str, operation: str, **overrides):

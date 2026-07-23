@@ -9,13 +9,13 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from agent_relay_mcp.env_compat import getenv
+from agent_crossbar.env_compat import getenv
 
-mcp = FastMCP("agent_relay_shell")
+mcp = FastMCP("agent_crossbar_shell")
 
 
 def _cwd() -> Path:
-    raw = getenv("AGENT_RELAY_SHELL_CWD") or os.getcwd()
+    raw = getenv("AGENT_CROSSBAR_SHELL_CWD") or os.getcwd()
     return Path(raw).expanduser().resolve()
 
 

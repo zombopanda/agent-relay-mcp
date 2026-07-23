@@ -7,7 +7,7 @@ both match the same substitution.
 
 from __future__ import annotations
 
-from agent_relay_mcp.redaction import redact_secrets
+from agent_crossbar.redaction import redact_secrets
 
 SECRET = "sk-abcdef1234567890"
 

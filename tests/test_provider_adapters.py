@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from agent_relay_mcp.adapters import registry
-from agent_relay_mcp.adapters.base import normalize_effort
-from agent_relay_mcp.adapters.codex import parse_model_list_response
-from agent_relay_mcp.adapters.opencode import parse_models_output
+from agent_crossbar.adapters import registry
+from agent_crossbar.adapters.base import normalize_effort
+from agent_crossbar.adapters.codex import parse_model_list_response
+from agent_crossbar.adapters.opencode import parse_models_output
 
 
 def test_every_public_profile_has_its_own_adapter_module() -> None:
@@ -36,7 +36,7 @@ def test_opencode_models_are_parsed_from_cli_output() -> None:
 
 def test_opencode_models_accepts_colon_tags() -> None:
     """parse_models_output must accept model IDs with colon tags."""
-    from agent_relay_mcp.adapters.opencode import parse_models_output
+    from agent_crossbar.adapters.opencode import parse_models_output
 
     result = parse_models_output(
         "openrouter/cohere/north-mini-code:free\n"
@@ -110,7 +110,7 @@ def test_adapter_support_tier_matches_profile_registry() -> None:
     profiles/chatgpt_pro.py (the intended source of truth) said
     'experimental' — doctor/profile_health surfaced the wrong tier.
     """
-    from agent_relay_mcp.profiles import PROFILE_REGISTRY, PROVIDER_SUPPORT_MATRIX
+    from agent_crossbar.profiles import PROFILE_REGISTRY, PROVIDER_SUPPORT_MATRIX
 
     for name, adapter in registry.ADAPTERS.items():
         assert adapter.support_tier == PROFILE_REGISTRY[name]["support_tier"], (

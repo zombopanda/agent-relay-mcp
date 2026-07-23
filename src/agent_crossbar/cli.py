@@ -1,4 +1,4 @@
-"""CLI entry points for Agent Relay MCP.
+"""CLI entry points for Agent Crossbar.
 
 Provides the ``doctor`` subcommand and the dispatcher that selects
 between doctor mode and the MCP server.
@@ -67,7 +67,7 @@ def doctor_cmd(json_output: bool = False, profile: str | None = None) -> None:
         json_output: If True, print JSON to stdout.
         profile: If set, only check this profile.
     """
-    from agent_relay_mcp.readiness import probe_all_profiles, probe_profile
+    from agent_crossbar.readiness import probe_all_profiles, probe_profile
 
     if profile:
         try:
@@ -88,7 +88,7 @@ def doctor_cmd(json_output: bool = False, profile: str | None = None) -> None:
 
 
 def main() -> None:
-    """CLI dispatcher: ``agent-relay-mcp [doctor]``.
+    """CLI dispatcher: ``agent-crossbar [doctor]``.
 
     With no arguments, starts the MCP server.
     With ``doctor``, runs readiness checks.
@@ -104,6 +104,6 @@ def main() -> None:
                 break
         doctor_cmd(json_output=json_output, profile=profile)
     else:
-        from agent_relay_mcp.server import main as server_main
+        from agent_crossbar.server import main as server_main
 
         server_main()

@@ -412,7 +412,7 @@ def _check_sentinel(case: GateCase, output: str) -> CheckResult:
 
 def _clean_ansi(text: str) -> str:
     """Strip ANSI escape sequences from tmux TUI output for sentinel matching."""
-    from agent_relay_mcp.tmux_output import normalize_tmux_output
+    from agent_crossbar.tmux_output import normalize_tmux_output
 
     return normalize_tmux_output(text)
 
@@ -503,8 +503,8 @@ def _server_params(env: dict[str, str]) -> StdioServerParameters:
 async def _run_cases(cases: list[GateCase]) -> int:
     with tempfile.TemporaryDirectory(prefix="agents-provider-gate-state-") as state_root:
         env = os.environ.copy()
-        env["AGENT_RELAY_STATE_DIR"] = state_root
-        env["AGENT_RELAY_CLIENT_NAME"] = "provider-surface-gate"
+        env["AGENT_CROSSBAR_STATE_DIR"] = state_root
+        env["AGENT_CROSSBAR_CLIENT_NAME"] = "provider-surface-gate"
 
         params = _server_params(env)
         failed = False

@@ -56,7 +56,7 @@ def _build_probe_argv() -> list[str]:
     """
     session_id = str(uuid.uuid4())
     short_id = session_id[:8]
-    name = f"agent-relay-model-probe-{short_id}"
+    name = f"agent-crossbar-model-probe-{short_id}"
     return list(_SAFE_CLAUDE_BASE_ARGS) + [
         "--session-id",
         session_id,

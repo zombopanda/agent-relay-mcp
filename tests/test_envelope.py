@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_relay_mcp.envelope import (
+from agent_crossbar.envelope import (
     DIAGNOSTICS_MAX_BYTES,
     FAILURE_STAGES,
     build_result_envelope,

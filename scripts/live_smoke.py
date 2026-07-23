@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
-from agent_relay_mcp.server import review_sync
+from agent_crossbar.server import review_sync
 
 
 @dataclass(frozen=True)

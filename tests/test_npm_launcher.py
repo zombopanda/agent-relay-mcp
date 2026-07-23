@@ -1,9 +1,9 @@
-"""Stub tests for the npm launcher (bin/agent-relay-mcp.mjs)."""
+"""Stub tests for the npm launcher (bin/agent-crossbar.mjs)."""
 
 import subprocess
 from pathlib import Path
 
-LAUNCHER = Path(__file__).resolve().parent.parent / "bin" / "agent-relay-mcp.mjs"
+LAUNCHER = Path(__file__).resolve().parent.parent / "bin" / "agent-crossbar.mjs"
 
 
 def test_launcher_syntax():
@@ -21,8 +21,8 @@ def test_launcher_argv_passthrough():
     launcher = LAUNCHER.read_text()
     # The launcher slices process.argv at index 2
     assert "process.argv.slice(2)" in launcher
-    # It constructs: uvx agent-relay-mcp <args>
-    assert "agent-relay-mcp" in launcher
+    # It constructs: uvx agent-crossbar <args>
+    assert "agent-crossbar" in launcher
     # It has uvx as primary spawn target
     assert '"uvx"' in launcher
 
