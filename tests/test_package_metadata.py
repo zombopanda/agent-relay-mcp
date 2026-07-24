@@ -97,6 +97,55 @@ def test_package_readme_has_uv_run():
     assert "uvx agent-crossbar" in readme  # primary install path
 
 
+def test_package_readme_uses_native_mcp_configuration_for_each_client():
+    readme = _load_readme()
+
+    assert "codex mcp add agents -- uvx agent-crossbar" in readme
+    assert "[mcp_servers.agents]" in readme
+    assert "claude mcp add --scope user agents -- uvx agent-crossbar" in readme
+    assert '"$schema": "https://opencode.ai/config.json"' in readme
+    assert '"command": ["uvx", "agent-crossbar"]' in readme
+
+
+def test_package_readme_does_not_claim_mcp_json_is_codex_config():
+    readme = _load_readme()
+    codex_section = readme.split("#### Codex", maxsplit=1)[1].split("#### Claude Code", maxsplit=1)[
+        0
+    ]
+
+    assert "Codex does **not** use" in codex_section
+    assert "`.mcp.json` format" in codex_section
+    assert '"mcpServers"' not in codex_section
+    assert ".codex/config.toml" in codex_section
+    assert "~/.codex/config.toml" in codex_section
+
+
+def test_package_readme_discloses_runtime_and_local_logging_requirements():
+    readme = _load_readme()
+
+    assert "uv is required for both launch paths" in readme
+    assert "full MCP request and response payloads" in readme
+    assert "not sent remotely" in readme
+    assert "35s for Codex" in readme
+
+
+def test_package_readme_claude_billing_anchor_has_a_matching_heading():
+    readme = _load_readme()
+
+    assert "](#claude-subscription-vs-print-sdk-billing)" in readme
+    assert "## Claude Subscription vs Print SDK Billing" in readme
+
+
+def test_package_readme_troubleshooting_matches_public_runtime_contract():
+    readme = _load_readme()
+
+    assert "| `preflight` |" not in readme
+    assert "`check_provider_limits_or_retry_with_free_model`" in readme
+    assert "| `AGENT_CROSSBAR_CLIENT_VERSION` | `unknown` |" in readme
+    assert "| `chatgpt_pro` | ask, review |" in readme
+    assert "uvx agent-crossbar doctor --profile codex --json" in readme
+
+
 # --- Public branding ---
 
 

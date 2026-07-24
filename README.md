@@ -22,60 +22,82 @@ uvx agent-crossbar
 npx agent-crossbar
 ```
 
-Prerequisites: [uv](https://docs.astral.sh/uv/getting-started/installation/) (for PyPI) or [Node.js](https://nodejs.org/) ≥ 20 (for npm launcher).
+Prerequisites: uv is required for both launch paths because the npm package is
+only a thin launcher around `uvx`; install it from the
+[uv documentation](https://docs.astral.sh/uv/getting-started/installation/).
+The npm path additionally requires
+[Node.js](https://nodejs.org/) ≥ 20.
 
 ### 2. Check Readiness (doctor)
 
 ```bash
 uvx agent-crossbar doctor
+
+# Optional: check one provider and emit machine-readable output
+uvx agent-crossbar doctor --profile codex --json
 ```
 
 Verifies that supported provider CLIs are installed, authenticated, and runnable. A provider must be `ready` before jobs can be created.
 
 ### 3. Configure Your MCP Client
 
-#### Codex MCP Config
+#### Codex
 
-```json
-{
-  "mcpServers": {
-    "agents": {
-      "command": "uvx",
-      "args": ["agent-crossbar"]
-    }
-  }
-}
+For a user-wide installation shared by the Codex app, CLI, and IDE extension:
+
+```bash
+codex mcp add agents -- uvx agent-crossbar
+codex mcp list
 ```
 
-#### Claude Code MCP Config
+This writes the native Codex MCP configuration to `~/.codex/config.toml`.
+The equivalent explicit TOML is:
+
+```toml
+[mcp_servers.agents]
+command = "uvx"
+args = ["agent-crossbar"]
+```
+
+For a trusted-project-only installation, put the same TOML table in
+`.codex/config.toml` inside that repository. Codex does **not** use
+Claude Code's `.mcp.json` format.
+
+#### Claude Code
 
 Claude Code uses the native `claude_bg` noninteractive backend (`claude` profile). Interactive and print mode are **disabled** in v0.2.0 because `claude -p` uses separate Agent SDK credit/metered billing — read [Claude Billing](#claude-subscription-vs-print-sdk-billing) below.
 
-```json
-{
-  "mcpServers": {
-    "agents": {
-      "command": "uvx",
-      "args": ["agent-crossbar"]
-    }
-  }
-}
+For a user-wide installation:
+
+```bash
+claude mcp add --scope user agents -- uvx agent-crossbar
+claude mcp get agents
 ```
+
+Use `--scope project` instead to create a shareable project-root `.mcp.json`,
+or omit `--scope` for Claude Code's private local-project scope.
 
 **Claude prerequisite**: authenticate with `claude auth login`. The doctor will report `needs_auth` until you do.
 
-#### OpenCode MCP Config
+#### OpenCode
+
+Add this to the global `~/.config/opencode/opencode.json` or to a project-root
+`opencode.json`:
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "agents": {
-      "command": "uvx",
-      "args": ["agent-crossbar"]
+      "type": "local",
+      "command": ["uvx", "agent-crossbar"],
+      "enabled": true
     }
   }
 }
 ```
+
+Then verify it with `opencode mcp list`.
 
 ### 4. First Review Flow
 
@@ -123,6 +145,7 @@ With the MCP server running, from any MCP client:
 | Profile | Tasks | Interactive | Notes |
 |---------|-------|-------------|-------|
 | `reasonix` | ask, review, dev | false or true | Experimental TUI adapter; results use heuristic parsing |
+| `chatgpt_pro` | ask, review | false | Experimental macOS GUI adapter; requires a manual signed-in ChatGPT app/browser gate |
 
 Latest local experimental evidence (2026-07-23): the default
 `deepseek-v4-flash` noninteractive ask gate received its live sentinel. This
@@ -137,7 +160,7 @@ result is informational and does not promote Reasonix to the supported tier.
 | OpenCode | `opencode` CLI | `opencode auth list` |
 | Reasonix | `reasonix` CLI | `reasonix doctor --json` |
 
-## Claude: Native Background Path
+## Claude Subscription vs Print SDK Billing
 
 Agent Crossbar uses Claude's native `claude --bg` (noninteractive) subscription path. This uses your ordinary Claude plan — no separate API billing.
 
@@ -151,7 +174,7 @@ Agent Crossbar uses Claude's native `claude --bg` (noninteractive) subscription 
 | Layer | Default | Notes |
 |-------|---------|-------|
 | External MCP read timeout | Client-dependent | Set in your MCP client. A client-side timeout does **not** cancel the durable background job — it continues executing and results remain available via `job_tail`/`job_result`. |
-| Internal preflight probe | 15s per provider | Independent bounded probe per provider, cached for 60s. A preflight failure blocks job creation — no job is started. |
+| Internal preflight probe | Profile-dependent | Sequential read-only checks are individually bounded: up to 35s for Codex, 25s for OpenCode, 15s for Claude, and 30s for Reasonix. Results are cached for 60s. A failure blocks job creation before a job is written. |
 | `max_runtime_sec` (agent_start) | 1800s (30 min) | Server-side job deadline, configurable per job. When exceeded, the job terminates with a terminal `timeout` result. |
 | `job_tail` / `job_result` | — | Available any time after the initial `agent_start` response. No deadline is enforced on result polling. |
 
@@ -162,7 +185,11 @@ The `doctor` CLI reports readiness and preflight failures only. It does **not** 
 - **State directory**: `~/.local/state/agent-crossbar` (override with `AGENT_CROSSBAR_STATE_DIR`)
 - **Job storage**: one directory per job under `jobs/`
 - **Retention**: no automatic cleanup in v0.2.0 — jobs persist until manually deleted
-- **No remote telemetry**: Agent Crossbar does not phone home. All state is local.
+- **Local audit logs**: full MCP request and response payloads, including
+  prompts and results, are written under `telemetry/` with owner-only
+  permissions. They follow the same no-cleanup policy in v0.2.0.
+- **No remote telemetry**: these audit logs are not sent remotely; Agent
+  Crossbar does not phone home.
 
 ## Troubleshooting by Error Code
 
@@ -179,9 +206,8 @@ The `doctor` CLI reports readiness and preflight failures only. It does **not** 
 | `chatgpt_pro_manual_gate` | ChatGPT Pro needs manual setup | Launch ChatGPT desktop app and sign in |
 | `acp_launch_error` | ACP agent process failed to launch (binary missing, dependency error) | Check provider CLI installation, run `agent-crossbar doctor` |
 | `acp_protocol_error` | ACP protocol handshake or message error (version mismatch, invalid request) | Check provider and protocol logs; provider CLI may need upgrade |
-| `acp_timeout` | ACP job exceeded `max_runtime_sec` while awaiting an already-delivered prompt's response | Retry with a higher `max_runtime_sec` value |
+| `acp_timeout` | ACP job exceeded `max_runtime_sec` while awaiting an already-delivered prompt's response | Follow `failure.next_action`: normally increase `max_runtime_sec`; for OpenCode, `check_provider_limits_or_retry_with_free_model` |
 | `acp_prompt_delivery_timeout` | ACP job exceeded `max_runtime_sec` before the prompt was ever dispatched to the agent (stuck in handshake/session setup) | Check the provider CLI installation and launch, then retry |
-| `preflight` | Job blocked before creation | Run `agent-crossbar doctor` for details |
 
 Stable error codes are guaranteed across patch versions. The `next_action` field in job results provides exact remediation.
 
@@ -191,7 +217,7 @@ Stable error codes are guaranteed across patch versions. The `next_action` field
 |----------|---------|-------------|
 | `AGENT_CROSSBAR_STATE_DIR` | `~/.local/state/agent-crossbar` | State root directory |
 | `AGENT_CROSSBAR_CLIENT_NAME` | `agent-crossbar` | Client name in telemetry |
-| `AGENT_CROSSBAR_CLIENT_VERSION` | — | Optional client version |
+| `AGENT_CROSSBAR_CLIENT_VERSION` | `unknown` | Optional client version recorded in local audit logs |
 | `AGENT_CROSSBAR_DEFAULT_CWD` | `PWD` | Default working directory for dev jobs |
 
 **Migration note**: The old `AGENT_HARNESS_*` env var names still work but emit a `FutureWarning`. Rename them to `AGENT_CROSSBAR_*`. The compat shim will be removed in v0.4.0.
@@ -209,7 +235,7 @@ MCP Client (Codex / Claude / OpenCode)
   Codex Claude OpenCode  ← provider adapters
    │    │     │
    ▼    ▼     ▼
-  tmux / print / ACP  ← transports
+  ACP / claude_bg / tmux / GUI  ← provider backends
 ```
 
 One Python package (`agent-crossbar` on PyPI). Bounded provider adapters under `agent_crossbar.adapters`. No separate plugin packages in v0.2.0.
