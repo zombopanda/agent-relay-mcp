@@ -193,15 +193,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          notes_file="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ ! -f "${notes_file}" ]; then
+            echo "::error::missing release notes file ${notes_file}" >&2
+            exit 1
+          fi
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release edit "${GITHUB_REF_NAME}" \
               --title "Agent Crossbar ${GITHUB_REF_NAME}" \
-              --notes-file "docs/releases/v0.2.0.md"
+              --notes-file "${notes_file}"
             gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
           else
             gh release create "${GITHUB_REF_NAME}" \
               --verify-tag \
               --title "Agent Crossbar ${GITHUB_REF_NAME}" \
-              --notes-file "docs/releases/v0.2.0.md" \
+              --notes-file "${notes_file}" \
               dist/*
           fi
