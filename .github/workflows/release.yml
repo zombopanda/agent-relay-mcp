@@ -82,7 +82,7 @@ jobs:
             "import agent_crossbar; print(agent_crossbar.__version__)"
 
       - name: Attest distributions
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*
 
