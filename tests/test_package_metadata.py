@@ -156,6 +156,13 @@ def test_release_attests_built_distributions():
     assert "subject-path:" in workflow
 
 
+def test_release_creation_is_idempotent():
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    assert 'gh release view "${GITHUB_REF_NAME}"' in workflow
+    assert 'gh release edit "${GITHUB_REF_NAME}"' in workflow
+    assert 'gh release upload "${GITHUB_REF_NAME}" dist/* --clobber' in workflow
+
+
 def test_live_gate_uses_protected_environment():
     workflow = (ROOT / ".github" / "workflows" / "live-gate.yml").read_text()
     assert "environment: live-gates" in workflow
@@ -168,6 +175,7 @@ def test_install_smoke_uses_an_isolated_virtual_environment():
         assert "/tmp/smoke-venv/bin/agent-crossbar doctor" in workflow
 
 
-def test_gitleaks_action_has_no_ignored_inputs():
+def test_gitleaks_action_has_required_token_and_no_ignored_inputs():
     workflow = (ROOT / ".github" / "workflows" / "security.yml").read_text()
+    assert "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}" in workflow
     assert "config-path:" not in workflow
