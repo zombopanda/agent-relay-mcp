@@ -21,9 +21,11 @@ from acp.schema import (
 from agent_crossbar.acp_client import (
     AcpLaunchError,
     AcpProtocolError,
+    AcpProviderUnavailableError,
     AcpResult,
     AcpTimeoutError,
     _OneShotClient,
+    classify_provider_failure,
     run_acp_prompt,
 )
 from agent_crossbar.models import Autonomy
@@ -63,6 +65,7 @@ class _Conn:
         hang_before_prompt=False,
         protocol_error=None,
         protocol_error_after_prompt=None,
+        model="test-model",
     ):
         self.texts = texts or []
         self.stop_reason = stop_reason
@@ -71,7 +74,9 @@ class _Conn:
         self.hang_before_prompt = hang_before_prompt
         self.protocol_error = protocol_error
         self.protocol_error_after_prompt = protocol_error_after_prompt
+        self.model = model
         self.client = None
+        self.prompt_cancelled = False
 
     async def initialize(self, protocol_version, client_capabilities=None, **kwargs):
         if self.protocol_error is not None:
@@ -81,11 +86,56 @@ class _Conn:
     async def new_session(self, cwd, **kwargs):
         if self.hang_before_prompt:
             await asyncio.Event().wait()
-        return SimpleNamespace(session_id=self.session_id)
+        return SimpleNamespace(
+            session_id=self.session_id,
+            config_options=[
+                SessionConfigOptionSelect(
+                    type="select",
+                    id="model",
+                    name="Model",
+                    description=None,
+                    category="model",
+                    current_value=self.model,
+                    options=[
+                        SessionConfigSelectOption(
+                            value=self.model,
+                            name=self.model,
+                            description=None,
+                        )
+                    ],
+                )
+            ],
+        )
+
+    async def set_config_option(self, config_id, session_id, value, **kwargs):
+        self.model = value
+        return SimpleNamespace(
+            config_options=[
+                SessionConfigOptionSelect(
+                    type="select",
+                    id="model",
+                    name="Model",
+                    description=None,
+                    category="model",
+                    current_value=value,
+                    options=[
+                        SessionConfigSelectOption(
+                            value=value,
+                            name=value,
+                            description=None,
+                        )
+                    ],
+                )
+            ]
+        )
 
     async def prompt(self, session_id, prompt, **kwargs):
         if self.hang:
-            await asyncio.Event().wait()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.prompt_cancelled = True
+                raise
         if self.protocol_error_after_prompt is not None:
             raise self.protocol_error_after_prompt
         for text in self.texts:
@@ -246,6 +296,7 @@ def test_run_acp_prompt_success():
                 "safe",
                 "/tmp",
                 autonomy=Autonomy.EDIT_LOCAL,
+                model="test-model",
             )
         )
     assert isinstance(result, AcpResult)
@@ -267,9 +318,10 @@ def test_invalid_autonomy_no_spawn():
             _run(
                 run_acp_prompt(
                     ["fake"],
-                    secret,
-                    "/tmp",
-                    autonomy="invalid",
+                        secret,
+                        "/tmp",
+                        autonomy="invalid",
+                        model="test-model",
                 )
             )
     assert secret not in str(exc.value)
@@ -296,9 +348,10 @@ def test_launch_error_maps():
             _run(
                 run_acp_prompt(
                     ["fake"],
-                    secret,
-                    "/tmp",
-                    autonomy=Autonomy.EDIT_LOCAL,
+                        secret,
+                        "/tmp",
+                        autonomy=Autonomy.EDIT_LOCAL,
+                        model="test-model",
                 )
             )
     assert secret not in str(exc.value)
@@ -317,9 +370,10 @@ def test_protocol_error_maps():
             _run(
                 run_acp_prompt(
                     ["fake"],
-                    secret,
-                    "/tmp",
-                    autonomy=Autonomy.EDIT_LOCAL,
+                        secret,
+                        "/tmp",
+                        autonomy=Autonomy.EDIT_LOCAL,
+                        model="test-model",
                 )
             )
     assert "handshake failed" in str(exc.value)
@@ -343,9 +397,10 @@ def test_protocol_error_after_prompt_dispatch_marks_execution_stage():
             _run(
                 run_acp_prompt(
                     ["fake"],
-                    secret,
-                    "/tmp",
-                    autonomy=Autonomy.EDIT_LOCAL,
+                        secret,
+                        "/tmp",
+                        autonomy=Autonomy.EDIT_LOCAL,
+                        model="test-model",
                 )
             )
     assert secret not in str(exc.value)
@@ -366,13 +421,15 @@ def test_timeout_cleanup():
                 run_acp_prompt(
                     ["fake"],
                     secret,
-                    "/tmp",
-                    autonomy=Autonomy.EDIT_LOCAL,
-                    timeout=0.01,
+                        "/tmp",
+                        autonomy=Autonomy.EDIT_LOCAL,
+                        timeout=0.01,
+                        model="test-model",
                 )
             )
     assert secret not in str(exc.value)
     assert state.get("cleaned") is True
+    assert conn.prompt_cancelled is True
     # Prompt was already dispatched (hang happens inside prompt()) — the
     # timeout is a legitimate execution-stage timeout, not a delivery failure.
     assert exc.value.stage == "execution"
@@ -395,9 +452,10 @@ def test_timeout_before_prompt_sent_marks_prompt_delivery_stage():
                 run_acp_prompt(
                     ["fake"],
                     secret,
-                    "/tmp",
-                    autonomy=Autonomy.EDIT_LOCAL,
-                    timeout=0.01,
+                        "/tmp",
+                        autonomy=Autonomy.EDIT_LOCAL,
+                        timeout=0.01,
+                        model="test-model",
                 )
             )
     assert secret not in str(exc.value)
@@ -543,25 +601,24 @@ def _spawn_with_config(conn):
 class TestRunAcpPromptModelSelection:
     """TDD RED: tests for model config-option selection in run_acp_prompt."""
 
-    def test_model_none_does_not_set_config(self):
-        """When model is None, set_config_option is never called."""
+    def test_model_none_is_rejected(self):
+        """Internal ACP calls cannot bypass the required-model contract."""
         model_opt = _config_with_category(values=["opencode-go/deepseek-v4-flash"])
         conn = _ConnWithConfig(config_options=[model_opt])
         with mock.patch(
             "agent_crossbar.acp_client.spawn_agent_process",
             _spawn_with_config(conn),
         ):
-            result = _run(
-                run_acp_prompt(
-                    ["fake"],
-                    "hello",
-                    "/tmp",
-                    autonomy=Autonomy.EDIT_LOCAL,
-                    model=None,
+            with pytest.raises(AcpProtocolError, match="Requested model"):
+                _run(
+                    run_acp_prompt(
+                        ["fake"],
+                        "hello",
+                        "/tmp",
+                        autonomy=Autonomy.EDIT_LOCAL,
+                        model=None,  # type: ignore[arg-type]
+                    )
                 )
-            )
-        assert isinstance(result, AcpResult)
-        assert conn.set_config_option_calls == []
 
     def test_model_calls_set_config_option_via_category(self):
         """Finds config option by category=='model' and calls set_config_option."""
@@ -840,3 +897,61 @@ class TestRunAcpJobForwardsModel:
 
         _, kwargs = mock_run.call_args
         assert kwargs["model"] == "opencode-go/deepseek-v4-flash"
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("429 Too Many Requests", "provider_limit_exhausted"),
+        ("Weekly usage limit reached", "provider_limit_exhausted"),
+        ("insufficient_quota", "provider_limit_exhausted"),
+        ("Internal error: No provider available", "provider_unavailable"),
+    ],
+)
+def test_provider_failure_classification_is_actionable_and_sanitized(text, code):
+    classified = classify_provider_failure(text)
+    assert classified is not None
+    assert classified[0] == code
+    assert text not in classified[1]
+
+
+def test_provider_failure_exception_carries_machine_readable_code():
+    exc = AcpProviderUnavailableError(
+        "provider_limit_exhausted",
+        "The selected provider has exhausted its quota or rate limit",
+    )
+    assert exc.code == "provider_limit_exhausted"
+    assert exc.stage == "prompt_delivery"
+
+
+def test_stderr_quota_failure_interrupts_hung_acp_startup():
+    conn = _Conn(hang_before_prompt=True)
+
+    class _QuotaStderr:
+        async def readline(self):
+            return b"429 weekly usage limit reached\n"
+
+    stderr = _QuotaStderr()
+
+    @asynccontextmanager
+    async def _spawn_with_quota(to_client, command, *args, **kwargs):
+        conn.client = to_client(conn) if callable(to_client) else to_client
+        yield conn, SimpleNamespace(pid=123, stderr=stderr)
+
+    with mock.patch(
+        "agent_crossbar.acp_client.spawn_agent_process",
+        _spawn_with_quota,
+    ):
+        with pytest.raises(AcpProviderUnavailableError) as exc:
+            _run(
+                run_acp_prompt(
+                    ["fake"],
+                    "safe",
+                    "/tmp",
+                    autonomy=Autonomy.EDIT_LOCAL,
+                    model="test-model",
+                    startup_timeout=5,
+                )
+            )
+    assert exc.value.code == "provider_limit_exhausted"
+    assert exc.value.stage == "prompt_delivery"

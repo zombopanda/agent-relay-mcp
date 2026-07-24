@@ -6,7 +6,7 @@ import json
 import re
 
 from ..discovery_runner import DiscoveryProcess
-from ..profiles.opencode import OPENCODE_DEFAULT_MODEL, SUPPORT_TIER
+from ..profiles.opencode import SUPPORT_TIER
 from .base import PUBLIC_EFFORTS, ModelCatalog, ModelInfo, StaticAdapter
 
 # Strict provider/model ID pattern: at least one '/', valid chars
@@ -17,17 +17,19 @@ from .base import PUBLIC_EFFORTS, ModelCatalog, ModelInfo, StaticAdapter
 
 _MODEL_ID_RE = re.compile(r"^(?!.*://)(?!.*//)[a-zA-Z0-9~][-a-zA-Z0-9._~@/:]*/[-a-zA-Z0-9._~@:]+$")
 
-_QUALIFIED_DEFAULT_MODEL = OPENCODE_DEFAULT_MODEL
+# Internal qualified default for discovery-level default-model heuristic.
+# This is NOT exposed as a public API default — model is always required.
+_QUALIFIED_DEFAULT_MODEL = "opencode/deepseek-v4-flash-free"
 
 
 def _select_default_model(model_ids: list[str]) -> str | None:
     """Pick the catalog default from live-discovered *model_ids*.
 
-    Prefers the configured qualified default (``profiles.opencode``) whenever
-    it is present in the live list, regardless of its row order — the CLI's
-    row order is not a qualification signal. If the qualified default is
-    absent, falls back to the first discovered model: deterministic, but not
-    a claim that it is itself a qualified/supported default.
+    Prefers the configured qualified default whenever it is present in the
+    live list, regardless of its row order — the CLI's row order is not a
+    qualification signal. If the qualified default is absent, falls back to
+    the first discovered model: deterministic, but not a claim that it is
+    itself a qualified/supported default.
     """
     if not model_ids:
         return None

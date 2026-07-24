@@ -63,5 +63,5 @@ class StartRequest:
     transport: str
     autonomy: str
     sensitivity: str
+    model: str
     prompt: str = ""
-    model: str | None = None

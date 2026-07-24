@@ -22,7 +22,7 @@ from agent_crossbar.adapters.registry import get_adapter
 from agent_crossbar.agent_runner import start_agent_job
 from agent_crossbar.discovery import cached_profile_health_entry, live_profile_registry
 from agent_crossbar.env_compat import getenv
-from agent_crossbar.envelope import sanitize_diagnostic_text
+from agent_crossbar.envelope import build_result_envelope, sanitize_diagnostic_text
 from agent_crossbar.jobs import JobStore
 from agent_crossbar.profiles import list_profiles
 from agent_crossbar.runner import (
@@ -405,9 +405,9 @@ _TASK_TO_OPERATION: dict[str, str] = {"ask": "advice", "review": "review", "dev"
 def agent_start(
     profile: str,
     prompt: str,
+    model: str,
     task: str = "ask",
     interactive: bool = False,
-    model: str | None = None,
     effort: str | None = None,
     cwd: str | None = None,
     scope: dict[str, Any] | None = None,
@@ -1073,7 +1073,7 @@ def job_stop(
                     )
 
         # ACP backend: mark stopped first (prevents background set_result race),
-        # then safely terminate the dedicated process group.
+        # then safely terminate the recorded ACP child process.
         acp_stop_data: dict | None = None
         if backend == "acp":
             # Mark stopped BEFORE termination so background completion cannot
@@ -1094,6 +1094,34 @@ def job_stop(
                 message=f"ACP termination: {acp_stop_data.get('reason', 'unknown')}",
                 data=acp_stop_data,
             )
+            summary = f"Job stopped: {reason}"
+            envelope = build_result_envelope(
+                status="cancelled",
+                stop_reason=reason,
+                output=summary,
+                summary=summary,
+                created_at=meta.get("created") or meta.get("started_at"),
+                started_at=meta.get("started_at"),
+                requested={
+                    "profile": meta.get("profile"),
+                    "model": meta.get("model"),
+                    "effort": meta.get("effort"),
+                    "task": meta.get("task"),
+                    "interactive": meta.get("interactive", False),
+                    "cwd": meta.get("cwd"),
+                },
+                resolved={
+                    "profile": meta.get("profile"),
+                    "model": meta.get("model"),
+                    "effort": meta.get("effort"),
+                    "task": meta.get("task"),
+                    "interactive": meta.get("interactive", False),
+                    "backend": "acp",
+                    "cwd": meta.get("cwd"),
+                },
+                technical={"acp_stop": acp_stop_data},
+            )
+            store.set_stopped_result(job_id, summary=summary, envelope=envelope)
             return {
                 "ok": True,
                 "job_id": job_id,

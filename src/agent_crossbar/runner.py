@@ -18,7 +18,6 @@ from typing import Any, Callable
 
 from agent_crossbar.env_compat import getenv
 from agent_crossbar.jobs import JobStore
-from agent_crossbar.profiles import OPENCODE_DEFAULT_MODEL
 from agent_crossbar.providers import (
     _opencode_model_id,
     build_launch_plan,
@@ -1844,7 +1843,7 @@ def _candidates(req: dict[str, Any], prompt: str) -> list[CommandCandidate]:
     transport = req.get("transport", "print")
 
     if profile == "reasonix":
-        model = req.get("model") or "deepseek-v4-flash"
+        model = str(req["model"])
         if operation == "dev":
             effort = "high"
             reasonix_prompt = reasonix_dev_prompt(prompt)
@@ -1875,7 +1874,7 @@ def _candidates(req: dict[str, Any], prompt: str) -> list[CommandCandidate]:
         ]
 
     if profile == "codex":
-        model = str(req.get("model") or "gpt-5.6-sol")
+        model = str(req["model"])
         effort = str(req.get("effort") or "medium")
         argv = [
             "codex",
@@ -1895,7 +1894,7 @@ def _candidates(req: dict[str, Any], prompt: str) -> list[CommandCandidate]:
         return [CommandCandidate(name="codex exec", argv=argv)]
 
     if profile == "opencode":
-        model_id = _opencode_model_id(str(req.get("model") or OPENCODE_DEFAULT_MODEL))
+        model_id = _opencode_model_id(str(req.get("model") or ""))
         argv = ["opencode", "run", "-m", model_id]
         if operation == "dev":
             argv.append("--dangerously-skip-permissions")

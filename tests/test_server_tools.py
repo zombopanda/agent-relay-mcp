@@ -72,7 +72,7 @@ def test_profiles_list_returns_canonical(tmp_path, monkeypatch):
     assert len(result["profiles"]) == 5
     assert result["profile_details"]["claude"]["aliases"] == ["opus", "fable"]
     assert result["profile_details"]["codex"]["models"] == ["gpt-5.6-sol", "gpt-5.6-terra"]
-    assert result["profile_details"]["codex"]["default_model"] == "gpt-5.6-sol"
+    assert "default_model" not in result["profile_details"]["codex"]
     assert result["profile_details"]["codex"]["operations"] == ["review", "text", "dev"]
     assert result["profile_details"]["codex"]["interactive"] is False
     request = _read_jsonl(_today_dir(tmp_path) / "requests.jsonl")[0]
@@ -182,9 +182,9 @@ def test_profiles_list_uses_cached_models_when_available(tmp_path, monkeypatch):
     result = profiles_list()
     assert result["ok"] is True
     assert result["profile_details"]["codex"]["models"] == ["gpt-live-a", "gpt-live-b"]
-    assert result["profile_details"]["codex"]["default_model"] == "gpt-live-a"
+    assert "default_model" not in result["profile_details"]["codex"]
     # Schema stays minimal
-    allowed = {"aliases", "models", "default_model", "operations", "interactive", "support_tier"}
+    allowed = {"aliases", "models", "operations", "interactive", "support_tier"}
     for entry in result["profile_details"].values():
         assert set(entry.keys()) == allowed
 
@@ -227,4 +227,37 @@ def test_profiles_list_invokes_live_discovery_on_clean_cache(tmp_path, monkeypat
 
     assert "codex" in calls  # discovery was actually attempted, not skipped
     assert result["profile_details"]["codex"]["models"] == ["gpt-live-1", "gpt-live-2"]
-    assert result["profile_details"]["codex"]["default_model"] == "gpt-live-1"
+    assert "default_model" not in result["profile_details"]["codex"]
+
+
+def test_job_stop_acp_persists_terminal_result(tmp_path, monkeypatch):
+    from agent_crossbar.jobs import JobStore
+    from agent_crossbar.server import job_stop
+
+    monkeypatch.setenv("AGENT_CROSSBAR_STATE_DIR", str(tmp_path))
+    store = JobStore(tmp_path)
+    job = store.create_job(
+        profile="opencode",
+        operation="dev",
+        transport="print",
+        cwd=str(tmp_path),
+    )
+    meta = store._read_job_meta(job.path)
+    store.update_job_meta(
+        job.job_id,
+        {
+            **meta,
+            "status": "running",
+            "backend": "acp",
+            "model": "opencode-go/deepseek-v4-flash",
+            "task": "dev",
+        },
+    )
+
+    stopped = job_stop(job.job_id, reason="test_stop")
+    assert stopped["ok"] is True
+
+    result = store.get_result(job.job_id)
+    assert result["status"] == "cancelled"
+    assert result["stop_reason"] == "test_stop"
+    assert result["technical"]["acp_stop"]["reason"] == "no_acp_pid_in_meta"

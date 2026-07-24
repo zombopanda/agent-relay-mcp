@@ -78,6 +78,7 @@ def test_agent_start_preserves_cwd_and_effort(tmp_path, monkeypatch):
     server.agent_start(
         profile="reasonix",
         prompt="explain this",
+        model="deepseek-v4-flash",
         task="ask",
         cwd="/repo",
         effort="low",
@@ -89,6 +90,7 @@ def test_agent_start_preserves_cwd_and_effort(tmp_path, monkeypatch):
     server.agent_start(
         profile="reasonix",
         prompt="review that",
+        model="deepseek-v4-flash",
         task="review",
         cwd="/other",
         effort="medium",
@@ -100,6 +102,7 @@ def test_agent_start_preserves_cwd_and_effort(tmp_path, monkeypatch):
     server.agent_start(
         profile="codex",
         prompt="implement it",
+        model="gpt-5.6-sol",
         task="dev",
         cwd="/repo",
         effort="high",

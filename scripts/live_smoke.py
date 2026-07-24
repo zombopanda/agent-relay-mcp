@@ -15,8 +15,8 @@ from agent_crossbar.server import review_sync
 @dataclass(frozen=True)
 class SmokeCase:
     profile: str
+    model: str
     sentinel: str
-    model: str | None = None
 
 
 CASES = (

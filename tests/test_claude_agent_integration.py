@@ -16,7 +16,14 @@ from agent_crossbar.adapters.claude import (
     RunResult,
 )
 from agent_crossbar.jobs import JobStore
-from agent_crossbar.server import agent_start, job_send, job_stop
+from agent_crossbar.server import agent_start as _agent_start
+from agent_crossbar.server import job_send, job_stop
+
+
+def agent_start(*args, **kwargs):
+    """Claude integration tests always exercise an explicit Sonnet selection."""
+    kwargs.setdefault("model", "sonnet")
+    return _agent_start(*args, **kwargs)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -187,7 +194,7 @@ def test_agent_start_claude_uses_adapter_not_legacy_providers(
     assert launch_call[0:2] == ["claude", "--bg"]
     assert "-p" not in launch_call
     assert "bypassPermissions" not in launch_call
-    assert "--model" not in launch_call
+    assert launch_call[launch_call.index("--model") + 1] == "sonnet"
 
     # Verify job directory was created with proper metadata
     store = JobStore(claude_state_root)

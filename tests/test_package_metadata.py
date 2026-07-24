@@ -1,12 +1,27 @@
 """Package metadata consistency checks for public release artifacts."""
 
+import importlib.util
 import json
+import sys
 import tomllib
+from dataclasses import fields
 from pathlib import Path
+
+import pytest
 
 # The tests/ directory IS inside the package directory, so go up one level.
 PKG_DIR = Path(__file__).resolve().parents[1]
 ROOT = PKG_DIR if (PKG_DIR / ".github").exists() else PKG_DIR.parents[1]
+_gate_spec = importlib.util.spec_from_file_location(
+    "provider_surface_gate", PKG_DIR / "scripts" / "provider_surface_gate.py"
+)
+assert _gate_spec and _gate_spec.loader
+_gate = importlib.util.module_from_spec(_gate_spec)
+sys.modules[_gate_spec.name] = _gate
+_gate_spec.loader.exec_module(_gate)
+GateCase = _gate.GateCase
+_agent_start_args = _gate._agent_start_args
+_parse_args = _gate._parse_args
 
 
 def _load_package_json():
@@ -64,6 +79,22 @@ def test_npm_scripts_restored():
         scripts.get("provider:gate")
         == "uv run --extra test python scripts/provider_surface_gate.py"
     )
+
+
+def test_provider_gate_requires_and_forwards_explicit_model():
+    with pytest.raises(SystemExit):
+        _parse_args(["--profile", "codex"])
+
+    args = _parse_args(["--profile", "codex", "--model", "gpt-5.6-sol"])
+    case = GateCase(
+        profile=args.profile[0],
+        model=args.model[0],
+        effort=None,
+        task="ask",
+        interactive=False,
+    )
+    assert dict((field.name, field.type) for field in fields(GateCase))["model"] == "str"
+    assert _agent_start_args(case)["model"] == "gpt-5.6-sol"
 
 
 def test_pyproject_name():

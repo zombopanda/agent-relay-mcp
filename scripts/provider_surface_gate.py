@@ -47,7 +47,7 @@ class CheckResult:
 @dataclass(frozen=True)
 class GateCase:
     profile: str
-    model: str | None
+    model: str
     effort: str | None
     task: str
     interactive: bool
@@ -55,10 +55,9 @@ class GateCase:
 
     @property
     def label(self) -> str:
-        model = self.model or "default"
         effort = self.effort or "default"
         interactive = "interactive" if self.interactive else "oneshot"
-        return f"{self.profile}/{model}/{effort}/{self.task}/{interactive}"
+        return f"{self.profile}/{self.model}/{effort}/{self.task}/{interactive}"
 
 
 def _contains_blocking_prompt(output: str) -> bool:
@@ -92,6 +91,7 @@ def _agent_start_args(case: GateCase, cwd: str | None = None) -> dict[str, Any]:
         "task": case.task,
         "interactive": case.interactive,
         "max_runtime_sec": case.max_runtime_sec,
+        "model": case.model,
     }
 
     if case.task == "dev":
@@ -102,8 +102,6 @@ def _agent_start_args(case: GateCase, cwd: str | None = None) -> dict[str, Any]:
         # ask or review — both use sentinel prompt
         args["prompt"] = "Reply with exactly GPT_PRO_PROVIDER_GATE_OK"
 
-    if case.model:
-        args["model"] = case.model
     if case.effort:
         args["effort"] = case.effort
     return args
@@ -537,7 +535,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         argv = argv[1:]
     parser = argparse.ArgumentParser(description="Run live provider surface gate")
     parser.add_argument("--profile", action="append", required=True)
-    parser.add_argument("--model", action="append", default=[])
+    parser.add_argument("--model", action="append", required=True)
     parser.add_argument("--effort", action="append", default=[])
     parser.add_argument("--task", action="append", choices=["ask", "review", "dev"])
     parser.add_argument(
@@ -548,7 +546,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def _cases_from_args(args: argparse.Namespace) -> list[GateCase]:
-    models = args.model or [None]
+    models = args.model
     efforts = args.effort or [None]
     tasks = args.task or ["dev"]
     return [

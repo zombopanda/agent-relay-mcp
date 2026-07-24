@@ -331,14 +331,13 @@ def live_profile_registry(state_root: Path) -> dict[str, Any]:
                 state_root,
                 profile,
                 entry["models"],
-                entry["default_model"],
+                entry.get("default_model"),
             )
             for profile, entry in registry.items()
         }
         for profile, future in futures.items():
-            models, default_model = future.result()
+            models, _default_model = future.result()
             registry[profile]["models"] = models
-            registry[profile]["default_model"] = default_model
 
     return registry
 

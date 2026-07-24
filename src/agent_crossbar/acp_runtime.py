@@ -7,6 +7,7 @@ from agent_crossbar.acp_client import (
     AcpError,
     AcpLaunchError,
     AcpProtocolError,
+    AcpProviderUnavailableError,
     AcpResult,
     AcpTimeoutError,
     run_acp_prompt,
@@ -55,8 +56,8 @@ async def run_acp_job(
     provider: str,
     prompt: str,
     cwd: str,
+    model: str,
     task: str = "ask",
-    model: str | None = None,
     effort: str | None = None,
     autonomy: str | Autonomy = Autonomy.READ_ONLY,
     max_runtime_sec: int | None = None,
@@ -135,6 +136,10 @@ async def run_acp_job(
 
     # -- run -----------------------------------------------------------------------
     try:
+        def _record_acp_pid(pid: int) -> None:
+            current = store._read_job_meta(job.path)
+            store.update_job_meta(job_id, {**current, "acp_pid": pid})
+
         result: AcpResult = await run_acp_prompt(
             command,
             prompt,
@@ -142,7 +147,29 @@ async def run_acp_job(
             timeout=effective_timeout,
             autonomy=autonomy,
             model=model,
+            on_process_start=_record_acp_pid,
         )
+    except AcpProviderUnavailableError as exc:
+        safe = _safe_error(exc, prompt)
+        _fail(
+            store=store,
+            job_id=job_id,
+            safe_output=safe,
+            stop_reason="provider_unavailable",
+            stage=getattr(exc, "stage", "prompt_delivery"),
+            code=exc.code,
+            retryable=True,
+            next_action="choose_an_available_model_or_wait_for_quota_reset",
+            meta=meta,
+            started_at=started_at,
+            provider=provider,
+            model=model,
+            effort=effort,
+            task=task,
+            cwd=cwd,
+            diagnostics={"classification": exc.code},
+        )
+        return
     except AcpTimeoutError as exc:
         stage = getattr(exc, "stage", "execution")
         if stage == "prompt_delivery":
@@ -387,3 +414,54 @@ def _fail(
     )
 
     store.set_result(job_id, ok=False, summary=safe_output, envelope=envelope)
+
+
+def safe_acp_termination(meta: dict) -> dict:
+    """Safely terminate an ACP job's child process.
+
+    Reads the ACP process metadata stored during job creation and attempts
+    to terminate the recorded child process cleanly (SIGTERM first, then
+    SIGKILL after a grace period).  Idempotent — calling on an already-dead
+    process is safe and returns a consistent result.
+
+    Returns a dict with:
+      - terminated: bool — whether the process was found and terminated
+      - reason: str — human-readable outcome
+      - pid: int | None — the process ID that was targeted
+    """
+    pid = meta.get("acp_pid")
+    if pid is None:
+        return {"terminated": False, "reason": "no_acp_pid_in_meta", "pid": None}
+
+    import os
+    import signal
+    import time
+
+    try:
+        pid_int = int(pid)
+    except (ValueError, TypeError):
+        return {"terminated": False, "reason": f"invalid_acp_pid: {pid}", "pid": None}
+    if pid_int <= 1:
+        return {"terminated": False, "reason": "unsafe_acp_pid", "pid": pid_int}
+
+    # Check if process exists
+    try:
+        os.kill(pid_int, 0)
+    except OSError:
+        return {"terminated": True, "reason": "process_already_gone", "pid": pid_int}
+
+    # Try SIGTERM first
+    try:
+        os.kill(pid_int, signal.SIGTERM)
+    except OSError:
+        return {"terminated": True, "reason": "process_gone_during_terminate", "pid": pid_int}
+
+    # Grace period, then SIGKILL
+    time.sleep(1.0)
+    try:
+        os.kill(pid_int, 0)
+        # Still alive — force kill
+        os.kill(pid_int, signal.SIGKILL)
+        return {"terminated": True, "reason": "force_killed_after_sigterm", "pid": pid_int}
+    except OSError:
+        return {"terminated": True, "reason": "terminated_via_sigterm", "pid": pid_int}

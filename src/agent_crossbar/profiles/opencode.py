@@ -7,9 +7,8 @@ from __future__ import annotations
 SUPPORT_TIER = "supported"
 
 OPENCODE_PROVIDER_ID = "opencode-go"
-OPENCODE_DEFAULT_MODEL = "opencode/deepseek-v4-flash-free"
 OPENCODE_MODELS = [
-    OPENCODE_DEFAULT_MODEL,
+    "opencode/deepseek-v4-flash-free",
     "deepseek-v4-flash",
     "deepseek-v4-pro",
     "glm-5.1",
@@ -27,7 +26,6 @@ def build_entry() -> dict:
     return {
         "aliases": [],
         "models": OPENCODE_MODELS,
-        "default_model": OPENCODE_DEFAULT_MODEL,
         "operations": ["review", "text", "advice", "dev"],
         "interactive": False,
         "support_tier": SUPPORT_TIER,
@@ -42,7 +40,6 @@ def build_matrix_entry() -> dict:
         "operations": entry["operations"],
         "backend": "acp",
         "interaction_modes": ["noninteractive"],
-        "default_model": entry["default_model"],
         "effort_support": True,
         "billing_mode": "free_defaults",
         "job_send_supported": False,

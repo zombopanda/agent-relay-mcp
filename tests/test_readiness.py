@@ -888,7 +888,9 @@ class TestPreflightInAgentStart:
 
         monkeypatch.setattr(rmod, "probe_profile", fake_probe)
 
-        result = agent_start(profile="codex", prompt="test", task="ask")
+        result = agent_start(
+            profile="codex", prompt="test", model="gpt-5.6-sol", task="ask"
+        )
         assert result["ok"] is False
         assert result["error"] == "codex_missing"
         assert result["job_created"] is False
@@ -928,7 +930,12 @@ class TestPreflightInAgentStart:
         )
 
         # reasonix supports advice operation (task=ask)
-        result = agent_start(profile="reasonix", prompt="test", task="ask")
+        result = agent_start(
+            profile="reasonix",
+            prompt="test",
+            model="deepseek-v4-flash",
+            task="ask",
+        )
         assert result["ok"] is True
         assert "job_id" in result
 
@@ -965,12 +972,22 @@ class TestPreflightInAgentStart:
 
         # First call — should run the probe (via probe_profile → check_reasonix_readiness)
         rmod.readiness_cache.clear()
-        result1 = agent_start(profile="reasonix", prompt="test", task="ask")
+        result1 = agent_start(
+            profile="reasonix",
+            prompt="test",
+            model="deepseek-v4-flash",
+            task="ask",
+        )
         assert result1["ok"] is True
         assert call_count == 1
 
         # Second call within TTL — should use cache, not probe again
-        result2 = agent_start(profile="reasonix", prompt="test2", task="ask")
+        result2 = agent_start(
+            profile="reasonix",
+            prompt="test2",
+            model="deepseek-v4-flash",
+            task="ask",
+        )
         assert result2["ok"] is True
         assert call_count == 1  # Still 1, cache hit
 

@@ -11,8 +11,6 @@ from typing import Any
 from agent_crossbar.profiles import (
     CLAUDE_MODEL_IDS,
     CODEX_DEFAULT_EFFORT,
-    CODEX_DEFAULT_MODEL,
-    OPENCODE_DEFAULT_MODEL,
     OPENCODE_MODELS,
     OPENCODE_PROVIDER_ID,
 )
@@ -128,9 +126,12 @@ def _reasonix_plan(
     cwd: str | None = None,
     job_dir: str | None = None,
 ) -> LaunchPlan:
-    """Reasonix defaults to flash unless the caller asks for pro."""
-    if model is None:
-        model = "deepseek-v4-flash"
+    """Build a Reasonix launch plan for an explicitly selected model."""
+    if not model:
+        return LaunchPlan(
+            error="missing_model",
+            message="Model is required for Reasonix",
+        )
     if model not in REASONIX_ALLOWED_MODELS:
         return LaunchPlan(
             error="invalid_model",
@@ -266,7 +267,7 @@ def _codex_plan(
     cwd: str | None = None,
 ) -> LaunchPlan:
     """Codex native review with accepted_context_bypass_risk=true only for review/print."""
-    selected_model = model or CODEX_DEFAULT_MODEL
+    selected_model = model or ""
     selected_effort = effort or CODEX_DEFAULT_EFFORT
     selection_args = [
         "--model",
@@ -405,7 +406,7 @@ def _opencode_plan(
     cwd: str | None = None,
 ) -> LaunchPlan:
     """OpenCode uses opencode-go models through the native opencode CLI."""
-    selected_model = model or OPENCODE_DEFAULT_MODEL
+    selected_model = model or ""
     if selected_model.startswith(f"{OPENCODE_PROVIDER_ID}/"):
         selected_model = selected_model.removeprefix(f"{OPENCODE_PROVIDER_ID}/")
     if selected_model not in OPENCODE_MODELS:

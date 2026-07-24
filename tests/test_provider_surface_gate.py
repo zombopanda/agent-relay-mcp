@@ -135,7 +135,7 @@ def test_agent_start_args_for_ask_task():
 def test_agent_start_args_for_review_task():
     case = gate.GateCase(
         profile="reasonix",
-        model=None,
+        model="gpt-5.6-sol",
         effort=None,
         task="review",
         interactive=False,
@@ -151,7 +151,7 @@ def test_agent_start_args_for_review_task():
 def test_agent_start_args_for_dev_task_includes_cwd_and_dev_prompt(tmp_path):
     case = gate.GateCase(
         profile="codex",
-        model=None,
+        model="gpt-5.6-sol",
         effort=None,
         task="dev",
         interactive=False,
@@ -167,7 +167,7 @@ def test_agent_start_args_for_dev_task_includes_cwd_and_dev_prompt(tmp_path):
 def test_max_runtime_sec_defaults_to_30_minutes():
     case = gate.GateCase(
         profile="codex",
-        model=None,
+        model="gpt-5.6-sol",
         effort=None,
         task="dev",
         interactive=False,
@@ -181,6 +181,8 @@ def test_cli_max_runtime_sec_flows_to_gate_case_and_agent_start_args():
         [
             "--profile",
             "codex",
+            "--model",
+            "gpt-5.6-sol",
             "--task",
             "dev",
             "--max-runtime-sec",
@@ -199,7 +201,7 @@ def test_max_runtime_sec_reaches_wait_for_result_deadline(monkeypatch):
     """--max-runtime-sec must set the polling deadline, not be overridden."""
     case = gate.GateCase(
         profile="codex",
-        model=None,
+        model="gpt-5.6-sol",
         effort=None,
         task="dev",
         interactive=False,
@@ -250,6 +252,8 @@ def test_main_allows_ask_task(monkeypatch):
         [
             "--profile",
             "reasonix",
+            "--model",
+            "deepseek-v4-pro",
             "--task",
             "ask",
         ]
@@ -269,7 +273,16 @@ def test_main_allows_review_task(monkeypatch):
 
     monkeypatch.setattr(gate.anyio, "run", fake_run)
 
-    gate.main(["--profile", "reasonix", "--task", "review"])
+    gate.main(
+        [
+            "--profile",
+            "reasonix",
+            "--model",
+            "deepseek-v4-pro",
+            "--task",
+            "review",
+        ]
+    )
 
     assert captured["cases"][0].task == "review"
     assert captured["cases"][0].interactive is False
@@ -406,8 +419,12 @@ def test_parse_args_strips_leading_double_dash():
     """A leading '--' from pnpm/npm pass-through must be stripped before
     argparse parsing, so that _parse_args(['--', '--profile', 'codex', '--task', 'dev'])
     produces the same result as _parse_args(['--profile', 'codex', '--task', 'dev'])."""
-    normal = gate._parse_args(["--profile", "codex", "--task", "dev"])
-    npm_style = gate._parse_args(["--", "--profile", "codex", "--task", "dev"])
+    normal = gate._parse_args(
+        ["--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"]
+    )
+    npm_style = gate._parse_args(
+        ["--", "--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"]
+    )
     assert normal == npm_style
 
 
@@ -420,7 +437,9 @@ def test_parse_args_handles_npm_double_dash_with_help():
 
 def test_parse_args_without_double_dash_remains_unchanged():
     """argv that does not start with '--' is passed through as-is."""
-    normal = gate._parse_args(["--profile", "codex", "--task", "dev"])
+    normal = gate._parse_args(
+        ["--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"]
+    )
     assert normal.profile == ["codex"]
     assert normal.task == ["dev"]
 

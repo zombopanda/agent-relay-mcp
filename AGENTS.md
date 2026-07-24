@@ -12,6 +12,9 @@ These rules apply to code contributions. They are intentionally concise and focu
 
 4. **`agent_start` schema is provider-neutral and minimal.** The only public fields are: `profile`, `prompt`, `task`, `interactive`, `model`, `effort`, `cwd`, `scope`, `max_runtime_sec`, plus standard client metadata (`client`, `client_name`, `client_version`, `client_session_id`). No transport enum, no provider-specific routing hints.
 
+   `model` is required. No profile, adapter, discovery result, convenience
+   wrapper, or test may silently select a default model.
+
 5. **`interactive` is a boolean.** The public schema exposes `interactive` as a single boolean. No transport enum, no public transport field. Transport selection is an internal adapter concern.
 
 6. **Forbidden (dead) public fields.** The following fields MUST NOT appear in the `agent_start` signature or any shipped schema: `external_context`, `budget_usd`, `text_subtype`, `review_target`, `context_target`, `full_local`. No compatibility shims, no deprecated aliases for these.
@@ -22,7 +25,7 @@ These rules apply to code contributions. They are intentionally concise and focu
 
 8. **Core modules are provider-agnostic.** `server.py`, `jobs.py`, `validation.py`, `envelope.py`, `readiness.py` MUST NOT contain provider-specific branching. Provider behavior is injected through adapter lookups.
 
-9. **Per-profile capabilities/models live in separate profile modules.** Each profile under `agent_crossbar/profiles/` owns its capabilities, models, and default configuration. Model lists MUST come from CLI discovery (`discovery.py`), not hardcoded. Profile modules MUST NOT import from each other.
+9. **Per-profile capabilities/models live in separate profile modules.** Each profile under `agent_crossbar/profiles/` owns its capabilities and models. Model lists MUST come from CLI discovery (`discovery.py`), not hardcoded. Profiles MUST NOT publish or apply default models. Profile modules MUST NOT import from each other.
 
 10. **No compatibility aliases for removed fields.** Removed fields (`transport`, `autonomy`, `sensitivity`, `sanitized_context_only`, `timeout_sec`, etc.) MUST NOT have runtime compatibility shims, aliases, or warning-based remapping. They are simply absent.
 

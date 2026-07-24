@@ -27,6 +27,7 @@ def test_unknown_profile_rejected_without_job_creation(tmp_path):
         "autonomy": "read_only",
         "sensitivity": "normal",
         "prompt": "x",
+        "model": "gpt-5.6-sol",
     }
     result = validate_start_request(req, state_root=tmp_path)
     assert result["ok"] is False
@@ -41,6 +42,7 @@ def test_required_autonomy_and_sensitivity(tmp_path):
         "profile": "reasonix",
         "transport": "print",
         "prompt": "x",
+        "model": "deepseek-v4-flash",
     }
     result = validate_start_request(req, state_root=tmp_path)
     assert result["ok"] is False
@@ -60,6 +62,7 @@ def _make_base_req(**overrides):
         "autonomy": "read_only",
         "sensitivity": "normal",
         "prompt": "x",
+        "model": "gpt-5.6-sol",
     }
     req.update(overrides)
     return req
@@ -77,7 +80,7 @@ def test_autonomy_propose_patch_accepted(tmp_path):
 
 def test_autonomy_edit_local_accepted(tmp_path):
     req = _make_base_req(
-        operation="dev", transport="tmux", autonomy="edit_local", profile="reasonix"
+        operation="dev", transport="tmux", autonomy="edit_local", profile="reasonix", model="deepseek-v4-pro"
     )
     result = validate_start_request(req, state_root=tmp_path)
     assert result["ok"] is True
@@ -97,7 +100,7 @@ def test_autonomy_all_enum_values_exist():
 
 
 def test_transport_gui_accepted(tmp_path):
-    req = _make_base_req(profile="chatgpt_pro", transport="gui", operation="advice")
+    req = _make_base_req(profile="chatgpt_pro", transport="gui", operation="advice", model="gpt-5")
     result = validate_start_request(req, state_root=tmp_path)
     assert result["ok"] is True
     assert result["error"] is None
@@ -151,7 +154,7 @@ def test_alias_deepseek_resolves_to_reasonix(tmp_path):
 )
 def test_claude_profile_names_resolve_with_expected_model(tmp_path, profile, model):
     result = validate_start_request(
-        _make_base_req(profile=profile, transport="print"),
+        _make_base_req(profile=profile, transport="print", model=model),
         state_root=tmp_path,
     )
 
@@ -163,7 +166,6 @@ def test_claude_profile_names_resolve_with_expected_model(tmp_path, profile, mod
 def test_codex_models_efforts_defaults_light_alias_and_xhigh(tmp_path):
     from agent_crossbar.profiles import (
         CODEX_DEFAULT_EFFORT,
-        CODEX_DEFAULT_MODEL,
         CODEX_EFFORT_ALIASES,
         CODEX_EFFORTS,
     )
@@ -171,11 +173,10 @@ def test_codex_models_efforts_defaults_light_alias_and_xhigh(tmp_path):
     assert allowed_models("codex") == ["gpt-5.6-sol", "gpt-5.6-terra"]
     assert CODEX_EFFORTS == ["low", "medium", "high", "max"]
     assert CODEX_EFFORT_ALIASES == {"light": "low"}
-    assert CODEX_DEFAULT_MODEL == "gpt-5.6-sol"
     assert CODEX_DEFAULT_EFFORT == "medium"
 
     default = validate_start_request(
-        _make_base_req(profile="codex", transport="print"),
+        _make_base_req(profile="codex", transport="print", model="gpt-5.6-sol"),
         state_root=tmp_path,
     )
     assert default["ok"] is True
@@ -248,10 +249,10 @@ def test_opencode_profile_exposes_all_opencode_go_models_and_defaults(tmp_path):
 
     with patch.object(_disc, "discover_profile_models", return_value=catalog):
         for operation, overrides in (
-            ("review", {"transport": "print", "autonomy": "read_only"}),
-            ("advice", {"transport": "print", "autonomy": "read_only"}),
-            ("text", {"transport": "print", "autonomy": "read_only"}),
-            ("dev", {"transport": "print", "autonomy": "edit_local"}),
+            ("review", {"transport": "print", "autonomy": "read_only", "model": "kimi-k2.7-code"}),
+            ("advice", {"transport": "print", "autonomy": "read_only", "model": "kimi-k2.7-code"}),
+            ("text", {"transport": "print", "autonomy": "read_only", "model": "kimi-k2.7-code"}),
+            ("dev", {"transport": "print", "autonomy": "edit_local", "model": "kimi-k2.7-code"}),
         ):
             result = validate_start_request(
                 _make_base_req(profile="opencode", operation=operation, **overrides),
@@ -259,7 +260,7 @@ def test_opencode_profile_exposes_all_opencode_go_models_and_defaults(tmp_path):
             )
             assert result["ok"] is True, operation
             assert result["profile"] == "opencode"
-            assert result["model"] == "opencode-go/glm-5.2"
+            assert result["model"] == "opencode-go/kimi-k2.7-code"
 
         explicit = validate_start_request(
             _make_base_req(
@@ -311,3 +312,100 @@ def test_list_profiles_excludes_aliases():
     assert "opencode" in profiles
     # Only the five supported canonical profiles
     assert len(profiles) == 5
+
+# ── Model required tests ───────────────────────────────────────────────────
+
+def test_model_omitted_fails_validation(tmp_path):
+    """Omitted model must fail before any provider process is created."""
+    req = _make_base_req(profile="reasonix", transport="print")
+    req.pop("model", None)
+    result = validate_start_request(req, state_root=tmp_path)
+    assert result["ok"] is False
+    assert result["error"] == "missing_model"
+    assert result["job_created"] is False
+
+
+def test_model_null_fails_validation(tmp_path):
+    """Null model must fail before any provider process is created."""
+    req = _make_base_req(profile="reasonix", transport="print", model=None)
+    result = validate_start_request(req, state_root=tmp_path)
+    assert result["ok"] is False
+    assert result["error"] == "missing_model"
+    assert result["job_created"] is False
+
+
+def test_model_blank_fails_validation(tmp_path):
+    """Blank model must fail before any provider process is created."""
+    req = _make_base_req(profile="reasonix", transport="print", model="")
+    result = validate_start_request(req, state_root=tmp_path)
+    assert result["ok"] is False
+    assert result["error"] == "missing_model"
+    assert result["job_created"] is False
+
+
+def test_model_blank_whitespace_fails_validation(tmp_path):
+    """Whitespace-only model must fail before any provider process is created."""
+    req = _make_base_req(profile="reasonix", transport="print", model="   ")
+    result = validate_start_request(req, state_root=tmp_path)
+    assert result["ok"] is False
+    assert result["error"] == "missing_model"
+    assert result["job_created"] is False
+
+
+def test_codex_omitted_model_fails(tmp_path):
+    """Codex with omitted model must fail — no silent default."""
+    req = _make_base_req(profile="codex", transport="print")
+    req.pop("model", None)
+    result = validate_start_request(req, state_root=tmp_path)
+    assert result["ok"] is False
+    assert result["error"] == "missing_model"
+
+
+def test_claude_omitted_model_fails(tmp_path):
+    """Claude with omitted model must fail — no silent default."""
+    req = _make_base_req(profile="claude", transport="print")
+    req.pop("model", None)
+    result = validate_start_request(req, state_root=tmp_path)
+    assert result["ok"] is False
+    assert result["error"] == "missing_model"
+
+
+def test_opencode_omitted_model_fails(tmp_path):
+    """OpenCode with omitted model must fail — no silent default from catalog."""
+    req = _make_base_req(profile="opencode", transport="print")
+    req.pop("model", None)
+    result = validate_start_request(req, state_root=tmp_path)
+    assert result["ok"] is False
+    assert result["error"] == "missing_model"
+
+
+def test_model_is_explicitly_passed_for_all_profiles(tmp_path):
+    """When model IS provided, all profiles must accept it."""
+    from agent_crossbar.adapters.base import ModelCatalog, ModelInfo
+
+    catalog = ModelCatalog(
+        models=("opencode-go/glm-5.2", "opencode-go/kimi-k2.7-code"),
+        default_model="opencode-go/glm-5.2",
+        native_efforts=("low", "medium", "high"),
+        source="test",
+        model_info=(
+            ModelInfo(id="opencode-go/glm-5.2", supported_efforts=("low", "medium", "high")),
+            ModelInfo(id="opencode-go/kimi-k2.7-code", supported_efforts=("medium", "high")),
+        ),
+    )
+
+    import agent_crossbar.discovery as _disc
+
+    with patch.object(_disc, "discover_profile_models", return_value=catalog):
+        # All profiles with explicit model should work
+        tests = [
+            {"profile": "reasonix", "model": "deepseek-v4-flash"},
+            {"profile": "codex", "model": "gpt-5.6-sol"},
+            {"profile": "claude", "model": "sonnet"},
+            {"profile": "opencode", "model": "kimi-k2.7-code"},
+        ]
+        for t in tests:
+            req = _make_base_req(**t)
+            result = validate_start_request(req, state_root=tmp_path)
+            assert result["ok"] is True, f"Failed for {t}: {result}"
+            assert result["model"] is not None, f"Model not set for {t}"

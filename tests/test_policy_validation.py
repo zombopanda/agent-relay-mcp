@@ -15,6 +15,15 @@ def _base_request(profile: str, operation: str, **overrides):
         "prompt": "test prompt",
     }
     req.update(overrides)
+    req.setdefault(
+        "model",
+        {
+            "reasonix": "deepseek-v4-flash",
+            "codex": "gpt-5.6-sol",
+            "claude": "sonnet",
+            "opencode": "opencode/deepseek-v4-flash-free",
+        }[req["profile"]],
+    )
     return req
 
 

@@ -301,7 +301,7 @@ def test_opencode_discover_models_handles_error() -> None:
 
 def test_opencode_verbose_parser_prefers_qualified_default_when_not_first() -> None:
     from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
-    from agent_crossbar.profiles.opencode import OPENCODE_DEFAULT_MODEL
+    OPENCODE_DEFAULT_MODEL = "opencode/deepseek-v4-flash-free"  # moved internal, define inline for tests
 
     qualified_default = OPENCODE_DEFAULT_MODEL
     output = (
@@ -349,7 +349,7 @@ def test_opencode_verbose_parser_falls_back_deterministically_when_qualified_def
 def test_opencode_nonverbose_fallback_prefers_qualified_default_when_not_first() -> None:
     """The non-verbose ``opencode models`` fallback path must apply the same
     qualified-default preference as the verbose parser."""
-    from agent_crossbar.profiles.opencode import OPENCODE_DEFAULT_MODEL
+    OPENCODE_DEFAULT_MODEL = "opencode/deepseek-v4-flash-free"  # moved internal, define inline for tests
 
     qualified_default = OPENCODE_DEFAULT_MODEL
     runner = FakeDiscoveryProcess(
@@ -2218,8 +2218,8 @@ def test_opencode_validation_accepts_catalog_model_not_in_static_list(tmp_path):
         assert result["model"] == "opencode-go/new-hotness-v1"
 
 
-def test_opencode_validation_defaults_to_catalog_default_model(tmp_path):
-    """When no model is requested, default to catalog.default_model (not static OPENCODE_DEFAULT_MODEL)."""
+def test_opencode_validation_never_defaults_to_catalog_model(tmp_path):
+    """A discovered selected/default model never replaces the required input."""
     import agent_crossbar.discovery as _disc
     from agent_crossbar.validation import validate_start_request
 
@@ -2240,9 +2240,9 @@ def test_opencode_validation_defaults_to_catalog_default_model(tmp_path):
             "prompt": "x",
         }
         result = validate_start_request(req, state_root=tmp_path)
-        assert result["ok"] is True, f"Expected ok=True, got {result}"
-        assert result["job_created"] is True
-        assert result["model"] == "opencode-go/kimi-k2.7-code"
+        assert result["ok"] is False
+        assert result["error"] == "missing_model"
+        assert result["job_created"] is False
 
 
 def test_opencode_validation_fails_preflight_on_discovery_error(tmp_path):
@@ -2355,6 +2355,7 @@ def test_opencode_preflight_uses_cache_path(tmp_path):
             "external_context": "allowed",
             "sensitivity": "normal",
             "prompt": "x",
+            "model": "opencode-go/glm-5.2",
         }
         result = validate_start_request(req, state_root=tmp_path)
         assert result["ok"] is True, f"Expected ok=True, got {result}"
@@ -2434,6 +2435,7 @@ def test_opencode_preflight_no_static_fallback():
             "external_context": "allowed",
             "sensitivity": "normal",
             "prompt": "x",
+            "model": "opencode-go/glm-5.2",
         }
         result = validate_start_request(req, state_root=Path("/tmp/fake"))
         assert result["ok"] is False, (
@@ -2557,7 +2559,7 @@ def test_live_profile_registry_overlays_discovered_models(tmp_path: Path) -> Non
         registry = live_profile_registry(tmp_path)
 
     assert registry["opencode"]["models"] == ["opencode-go/live-model"]
-    assert registry["opencode"]["default_model"] == "opencode-go/live-model"
+    assert "default_model" not in registry["opencode"]  # removed from public API
     # codex/claude probes failed → static fallback preserved
     from agent_crossbar.profiles import profile_registry
 
@@ -2567,14 +2569,7 @@ def test_live_profile_registry_overlays_discovered_models(tmp_path: Path) -> Non
     # Untouched non-discovery profiles keep their static values
     assert registry["reasonix"]["models"] == ["deepseek-v4-flash", "deepseek-v4-pro"]
     # Schema stays minimal — no new keys introduced
-    allowed = {
-        "aliases",
-        "models",
-        "default_model",
-        "operations",
-        "interactive",
-        "support_tier",
-    }
+    allowed = {"aliases", "models", "operations", "interactive", "support_tier"}
     for entry in registry.values():
         assert set(entry.keys()) == allowed
 

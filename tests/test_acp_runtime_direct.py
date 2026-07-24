@@ -6,8 +6,9 @@ TDD RED step — run_acp_job does not exist yet, imports will fail.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 
@@ -16,6 +17,7 @@ from agent_crossbar.acp_client import (
     AcpError,
     AcpLaunchError,
     AcpProtocolError,
+    AcpProviderUnavailableError,
     AcpResult,
     AcpTimeoutError,
 )
@@ -27,6 +29,11 @@ from agent_crossbar.models import Autonomy
 # ── helpers ──────────────────────────────────────────────────────────
 
 SECRET = "ssh-ed25519 AAA... bogus key"
+
+
+def test_run_acp_job_requires_explicit_model():
+    model = inspect.signature(run_acp_job).parameters["model"]
+    assert model.default is inspect.Parameter.empty
 
 
 def _create_job_store(tmp_path) -> tuple[JobStore, str]:
@@ -113,6 +120,7 @@ class TestRunAcpJobSuccess:
             timeout=12,
             autonomy=Autonomy.EDIT_LOCAL,
             model="glm",
+            on_process_start=ANY,
         )
 
         # ── assert store result ──
@@ -541,3 +549,75 @@ class TestExhaustiveFailureStageTaxonomy:
         # The specific bug reported in review: the old code emitted this
         # literal value, which was never one of the six allowed stages.
         assert stage != "protocol", f"{label}: regressed to the removed 'protocol' stage"
+
+# ── safe_acp_termination tests ──────────────────────────────────────────
+
+def test_provider_limit_failure_persists_terminal_actionable_envelope(tmp_path):
+    store, job_id = _create_job_store(tmp_path)
+    with patch(
+        "agent_crossbar.acp_runtime.run_acp_prompt",
+        new=AsyncMock(
+            side_effect=AcpProviderUnavailableError(
+                "provider_limit_exhausted",
+                "The selected provider has exhausted its quota or rate limit",
+            )
+        ),
+    ):
+        asyncio.run(
+            run_acp_job(
+                store,
+                job_id,
+                provider="opencode",
+                prompt="safe",
+                cwd=str(tmp_path),
+                model="opencode-go/deepseek-v4-flash",
+                max_runtime_sec=60,
+            )
+        )
+
+    result = store.get_result(job_id)
+    assert result is not None
+    assert result["ok"] is False
+    assert result["envelope"]["status"] == "failed"
+    assert result["envelope"]["failure"]["code"] == "provider_limit_exhausted"
+    assert result["envelope"]["failure"]["retryable"] is True
+
+
+class TestSafeAcpTermination:
+    def test_no_pid_in_meta(self):
+        from agent_crossbar.acp_runtime import safe_acp_termination
+
+        result = safe_acp_termination({})
+        assert result["terminated"] is False
+        assert result["reason"] == "no_acp_pid_in_meta"
+        assert result["pid"] is None
+
+    def test_invalid_pid_type(self):
+        from agent_crossbar.acp_runtime import safe_acp_termination
+
+        result = safe_acp_termination({"acp_pid": "not-a-number"})
+        assert result["terminated"] is False
+        assert "invalid_acp_pid" in result["reason"]
+        assert result["pid"] is None
+
+    def test_nonexistent_pid(self):
+        from agent_crossbar.acp_runtime import safe_acp_termination
+
+        result = safe_acp_termination({"acp_pid": 99999999})
+        assert result["terminated"] is True
+        assert result["reason"] == "process_already_gone"
+
+    def test_idempotent_double_call(self):
+        from agent_crossbar.acp_runtime import safe_acp_termination
+
+        meta = {"acp_pid": 99999999}
+        r1 = safe_acp_termination(meta)
+        r2 = safe_acp_termination(meta)
+        assert r1 == r2
+        assert r1["terminated"] is True
+
+    def test_importable_from_acp_runtime(self):
+        """safe_acp_termination must be importable — no ImportError."""
+        from agent_crossbar.acp_runtime import safe_acp_termination  # noqa: F811
+
+        assert callable(safe_acp_termination)

@@ -508,6 +508,41 @@ class JobStore:
         job.events.write(level="info", type="result", message=summary, data=result_data)
         return {"ok": True, "job_id": job_id}
 
+    def set_stopped_result(
+        self,
+        job_id: str,
+        *,
+        summary: str,
+        envelope: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Persist the terminal envelope for a job already marked stopped."""
+        job = self.get_job(job_id)
+        if job is None:
+            return {"ok": False, "error": "job_not_found", "job_id": job_id}
+        meta = self._read_job_meta(job.path)
+        if meta.get("status") != "stopped":
+            return {
+                "ok": False,
+                "error": "job_not_stopped",
+                "job_id": job_id,
+            }
+        result_path = job.path / "result.json"
+        if result_path.exists():
+            return {"ok": True, "job_id": job_id, "already_persisted": True}
+        result_data = {
+            "ok": False,
+            "summary": summary,
+            "artifacts": [],
+            "envelope": envelope,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        fd = os.open(str(result_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, _FILE_MODE)
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(result_data, separators=(",", ":")) + "\n")
+        result_path.chmod(_FILE_MODE)
+        job.events.write(level="info", type="result", message=summary, data=result_data)
+        return {"ok": True, "job_id": job_id}
+
     def _finalize_completed_tmux_job(self, job: Job) -> None:
         """Persist tmux results left behind by a short-lived MCP process."""
         if job.transport != "tmux":

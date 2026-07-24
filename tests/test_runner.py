@@ -254,6 +254,7 @@ def test_codex_native_review_runs_in_repo_cwd():
             "transport": "print",
             "prompt": "review this",
             "cwd": "/repo/codex-native-context",
+            "model": "gpt-5.6-sol",
         },
         run=fake_run,
     )

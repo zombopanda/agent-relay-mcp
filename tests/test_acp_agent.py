@@ -42,6 +42,28 @@ def _completed(returncode=0, stdout="", stderr=""):
     )
 
 
+@pytest.fixture(autouse=True)
+def _explicit_model_for_acp_routing_tests(monkeypatch):
+    """These routing tests always call the required-model API explicitly."""
+    from agent_crossbar import server
+
+    original = server.agent_start
+
+    def with_model(*args, **kwargs):
+        profile = kwargs.get("profile") or (args[0] if args else None)
+        kwargs.setdefault(
+            "model",
+            {
+                "codex": "gpt-5.6-sol",
+                "opencode": "opencode/deepseek-v4-flash-free",
+                "reasonix": "deepseek-v4-flash",
+            }.get(profile, "sonnet"),
+        )
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(server, "agent_start", with_model)
+
+
 def _fake_job_store(tmp_path):
     """Minimal job store that works for testing."""
     from agent_crossbar.jobs import JobStore
@@ -595,6 +617,7 @@ class TestAgentStartAcpRouting:
         result = server.agent_start(
             profile="opencode",
             prompt="test task",
+            model="opencode/test-model",
             task="dev",
             # NO effort → ACP
             cwd=str(tmp_path),

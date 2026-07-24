@@ -21,7 +21,9 @@ The module is a focused abstraction layer; it does NOT integrate with
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -86,6 +88,49 @@ class AcpProtocolError(AcpError):
     def __init__(self, message: str, *, stage: str = "execution") -> None:
         super().__init__(message)
         self.stage = stage
+
+
+class AcpProviderUnavailableError(AcpError):
+    """The selected provider cannot serve the requested model right now."""
+
+    def __init__(self, code: str, message: str, *, stage: str = "prompt_delivery") -> None:
+        super().__init__(message)
+        self.code = code
+        self.stage = stage
+
+
+_LIMIT_MARKERS = (
+    "429",
+    "quota",
+    "rate limit",
+    "rate-limit",
+    "usage limit",
+    "limit reached",
+    "credits required",
+    "insufficient_quota",
+    "exhausted",
+)
+_UNAVAILABLE_MARKERS = (
+    "no provider available",
+    "provider unavailable",
+    "model unavailable",
+)
+
+
+def classify_provider_failure(text: str) -> tuple[str, str] | None:
+    """Classify provider stderr/protocol text without returning the raw payload."""
+    normalized = text.casefold()
+    if any(marker in normalized for marker in _LIMIT_MARKERS):
+        return (
+            "provider_limit_exhausted",
+            "The selected provider has exhausted its quota or rate limit",
+        )
+    if any(marker in normalized for marker in _UNAVAILABLE_MARKERS):
+        return (
+            "provider_unavailable",
+            "No provider is currently available for the selected model",
+        )
+    return None
 
 
 class AcpLaunchError(AcpError):
@@ -268,7 +313,9 @@ async def run_acp_prompt(
     *,
     timeout: float | None = None,
     autonomy: str | Autonomy = Autonomy.READ_ONLY,
-    model: str | None = None,
+    model: str,
+    startup_timeout: float = 30.0,
+    on_process_start: Callable[[int], None] | None = None,
 ) -> AcpResult:
     """Launch a provider, optionally set model, run one ACP prompt, and return the result.
 
@@ -292,12 +339,14 @@ async def run_acp_prompt(
         timeout: Optional seconds for the entire operation (including
             launch).  Exceeding this raises :class:`AcpTimeoutError`.
         autonomy: Permission policy for ACP tool calls.
-        model: Optional model identifier. When provided, looks for a
+        model: Required model identifier. Looks for a
             ``SessionConfigOptionSelect`` with ``category=="model"`` (or
             ``id=="model"`` as fallback) in the ``NewSessionResponse``
             config options, verifies the model value is available, and
-            calls ``set_config_option`` before the prompt. When ``None``,
-            no config option is set.
+            calls ``set_config_option`` before the prompt.
+        startup_timeout: Maximum seconds for initialize, session creation,
+            and model selection before the job fails as a startup timeout.
+        on_process_start: Optional callback receiving the child PID.
 
     Returns:
         ``AcpResult`` with ``output``, ``stop_reason``, and ``session_id``.
@@ -322,25 +371,44 @@ async def run_acp_prompt(
                 provider_command[0],
                 *provider_command[1:],
                 cwd=cwd,
-            ) as (conn, _process):
-                # 1. initialize
-                init_response = await conn.initialize(
-                    protocol_version=PROTOCOL_VERSION,
-                    client_capabilities=ClientCapabilities(),
-                )
-                logger.debug(
-                    "ACP initialized: protocol_version=%s",
-                    getattr(init_response, "protocol_version", None),
-                )
+            ) as (conn, process):
+                if on_process_start is not None:
+                    on_process_start(process.pid)
 
-                # 2. session/new
-                session_response = await conn.new_session(cwd=cwd)
-                session_id: str = session_response.session_id
-                client_impl._session_id = session_id
-                logger.debug("ACP session created: id=%s", session_id)
+                async def _watch_stderr() -> None:
+                    stderr = getattr(process, "stderr", None)
+                    if stderr is None:
+                        await asyncio.Future()
+                    while True:
+                        line = await stderr.readline()
+                        if not line:
+                            await asyncio.Future()
+                        classified = classify_provider_failure(
+                            line.decode("utf-8", errors="replace")
+                        )
+                        if classified is not None:
+                            code, message = classified
+                            stage = "execution" if client_impl.prompt_sent else "prompt_delivery"
+                            raise AcpProviderUnavailableError(code, message, stage=stage)
 
-                # 2b. optional model config
-                if model is not None:
+                async def _prepare_session() -> str:
+                    # 1. initialize
+                    init_response = await conn.initialize(
+                        protocol_version=PROTOCOL_VERSION,
+                        client_capabilities=ClientCapabilities(),
+                    )
+                    logger.debug(
+                        "ACP initialized: protocol_version=%s",
+                        getattr(init_response, "protocol_version", None),
+                    )
+
+                    # 2. session/new
+                    session_response = await conn.new_session(cwd=cwd)
+                    session_id: str = session_response.session_id
+                    client_impl._session_id = session_id
+                    logger.debug("ACP session created: id=%s", session_id)
+
+                    # 2b. required model config
                     config_options: list[Any] | None = getattr(
                         session_response, "config_options", None
                     )
@@ -379,13 +447,55 @@ async def run_acp_prompt(
                             f"Agent rejected model {model!r}: the config option was not applied",
                             stage="prompt_delivery",
                         )
+                    return session_id
 
-                # 3. session/prompt
-                client_impl.prompt_sent = True
-                prompt_response = await conn.prompt(
-                    session_id=session_id,
-                    prompt=[text_block(prompt_text)],
-                )
+                stderr_task = asyncio.create_task(_watch_stderr())
+                prompt_task: asyncio.Task[Any] | None = None
+                try:
+                    prepare_task = asyncio.create_task(_prepare_session())
+                    done, _pending = await asyncio.wait(
+                        {prepare_task, stderr_task},
+                        timeout=startup_timeout,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if not done:
+                        prepare_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await prepare_task
+                        raise AcpTimeoutError(
+                            f"ACP startup timed out after {startup_timeout:.1f}s",
+                            stage="prompt_delivery",
+                        )
+                    if stderr_task in done:
+                        prepare_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await prepare_task
+                        await stderr_task
+                    session_id = await prepare_task
+
+                    # 3. session/prompt
+                    client_impl.prompt_sent = True
+                    prompt_task = asyncio.create_task(
+                        conn.prompt(
+                            session_id=session_id,
+                            prompt=[text_block(prompt_text)],
+                        )
+                    )
+                    done, _pending = await asyncio.wait(
+                        {prompt_task, stderr_task},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if stderr_task in done:
+                        await stderr_task
+                    prompt_response = await prompt_task
+                finally:
+                    if prompt_task is not None and not prompt_task.done():
+                        prompt_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await prompt_task
+                    stderr_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await stderr_task
                 stop_reason = getattr(prompt_response, "stop_reason", None) or "unknown"
                 client_impl._stop_reason = stop_reason
                 logger.debug(
@@ -410,6 +520,11 @@ async def run_acp_prompt(
         except AcpError:
             raise
         except Exception as exc:
+            classified = classify_provider_failure(str(exc))
+            if classified is not None:
+                code, message = classified
+                stage = "execution" if client_impl.prompt_sent else "prompt_delivery"
+                raise AcpProviderUnavailableError(code, message, stage=stage) from exc
             stage = "execution" if client_impl.prompt_sent else "prompt_delivery"
             raise AcpProtocolError(f"ACP protocol sequence failed: {exc}", stage=stage) from exc
 

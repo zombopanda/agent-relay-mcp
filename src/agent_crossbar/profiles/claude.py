@@ -19,7 +19,6 @@ def build_entry() -> dict:
     return {
         "aliases": ["opus", "fable"],
         "models": CLAUDE_MODELS,
-        "default_model": "opus",
         "operations": ["review", "advice", "dev"],
         "interactive": False,
         "support_tier": SUPPORT_TIER,
@@ -34,7 +33,6 @@ def build_matrix_entry() -> dict:
         "operations": entry["operations"],
         "backend": "claude_bg",
         "interaction_modes": ["noninteractive"],
-        "default_model": entry["default_model"],
         "effort_support": True,
         "billing_mode": "subscription_quota",
         "job_send_supported": False,

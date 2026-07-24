@@ -108,6 +108,7 @@ With the MCP server running, from any MCP client:
 2. profile_health                    → verify readiness before creating jobs
 3. agent_start(
      profile="codex",
+     model="gpt-5.6-sol",
      prompt="Review my uncommitted changes for security issues.",
      task="review"
    )                                 → creates a review job
@@ -134,11 +135,15 @@ With the MCP server running, from any MCP client:
 
 ### Supported Profiles
 
-| Profile | Tasks | Backend | OS | Default Model |
-|---------|-------|---------|-----|---------------|
-| `codex` | ask, review, dev | ACP one-shot (fallback to print for explicit effort) | macOS, Linux | gpt-5.6-sol |
-| `claude` | ask, review, dev | Native `claude_bg` (noninteractive only; `claude -p` disabled; no `job_send`) | macOS, Linux | opus |
-| `opencode` | ask, review, dev | ACP one-shot (fallback to print for explicit effort) | macOS, Linux | opencode/deepseek-v4-flash-free |
+| Profile | Tasks | Backend | OS | Model selection |
+|---------|-------|---------|-----|-----------------|
+| `codex` | ask, review, dev | ACP one-shot (fallback to print for explicit effort) | macOS, Linux | Required on every call |
+| `claude` | ask, review, dev | Native `claude_bg` (noninteractive only; `claude -p` disabled; no `job_send`) | macOS, Linux | Required on every call |
+| `opencode` | ask, review, dev | ACP one-shot (fallback to print for explicit effort) | macOS, Linux | Required on every call |
+
+`model` is mandatory for every `agent_start` request. Agent Crossbar never
+chooses or falls back to a default model. Use `profiles_list` to inspect the
+currently available model IDs before starting a job.
 
 ### Experimental (Installed, Not Guaranteed)
 
@@ -171,6 +176,7 @@ Agent Crossbar uses Claude's native `claude --bg` (noninteractive) subscription 
 |-------|---------|-------|
 | External MCP read timeout | Client-dependent | Set in your MCP client. A client-side timeout does **not** cancel the durable background job — it continues executing and results remain available via `job_tail`/`job_result`. |
 | Internal preflight probe | Profile-dependent | Sequential read-only checks are individually bounded: up to 35s for Codex, 25s for OpenCode, 15s for Claude, and 30s for Reasonix. Results are cached for 60s. A failure blocks job creation before a job is written. |
+| ACP startup and model selection | 30s | `initialize`, `session/new`, and explicit model selection are separately bounded. Provider quota/rate-limit diagnostics terminate the job immediately when detected. |
 | `max_runtime_sec` (agent_start) | 1800s (30 min) | Server-side job deadline, configurable per job. When exceeded, the job terminates with a terminal `timeout` result. |
 | `job_tail` / `job_result` | — | Available any time after the initial `agent_start` response. No deadline is enforced on result polling. |
 
@@ -200,10 +206,17 @@ The `doctor` CLI reports readiness and preflight failures only. It does **not** 
 | `reasonix_missing` | Reasonix CLI not on PATH | Install the Reasonix CLI |
 | `unsupported_os` | Provider requires different OS | Use a supported OS or different provider |
 | `chatgpt_pro_manual_gate` | ChatGPT Pro needs manual setup | Launch ChatGPT desktop app and sign in |
+| `missing_model` | `agent_start` omitted or passed an empty `model` | Call `profiles_list`, choose a model, and pass it explicitly |
+| `provider_limit_exhausted` | Provider quota, credits, or rate limit is exhausted | Wait for reset or choose another explicitly available model |
+| `provider_unavailable` | No backend is currently available for the selected model | Choose another model or retry after the provider recovers |
 | `acp_launch_error` | ACP agent process failed to launch (binary missing, dependency error) | Check provider CLI installation, run `agent-crossbar doctor` |
 | `acp_protocol_error` | ACP protocol handshake or message error (version mismatch, invalid request) | Check provider and protocol logs; provider CLI may need upgrade |
 | `acp_timeout` | ACP job exceeded `max_runtime_sec` while awaiting an already-delivered prompt's response | Follow `failure.next_action`: normally increase `max_runtime_sec`; for OpenCode, `check_provider_limits_or_retry_with_free_model` |
-| `acp_prompt_delivery_timeout` | ACP job exceeded `max_runtime_sec` before the prompt was ever dispatched to the agent (stuck in handshake/session setup) | Check the provider CLI installation and launch, then retry |
+| `acp_prompt_delivery_timeout` | ACP startup did not finish within its bounded startup window, before the prompt was dispatched | Check provider availability, quota, CLI installation, and selected model |
+
+`job_stop` is idempotent. ACP jobs persist a terminal result even when the
+provider process has already exited; running ACP child processes receive
+SIGTERM and then SIGKILL after a bounded grace period when necessary.
 
 Stable error codes are guaranteed across patch versions. The `next_action` field in job results provides exact remediation.
 

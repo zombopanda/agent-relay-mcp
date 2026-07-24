@@ -50,21 +50,13 @@ def test_reasonix_rejects_invalid_model():
     assert result.error == "invalid_model"
 
 
-def test_opencode_print_plan_defaults_and_rejects_invalid_model():
+def test_opencode_print_plan_requires_model_and_rejects_invalid_model():
     plan = build_launch_plan(
         profile="opencode", operation="review", transport="print", prompt="x", model=None
     )
 
-    assert plan.error is None
-    assert plan.metadata["model"] == "opencode/deepseek-v4-flash-free"
-    assert plan.metadata["model_id"] == "opencode/deepseek-v4-flash-free"
-    assert plan.candidates[0].args == [
-        "opencode",
-        "run",
-        "-m",
-        "opencode/deepseek-v4-flash-free",
-        "x",
-    ]
+    assert plan.error == "invalid_model"
+    assert plan.candidates == []
 
     invalid = build_launch_plan(
         profile="opencode",

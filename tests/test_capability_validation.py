@@ -49,6 +49,18 @@ def _base_request(**overrides):
         "prompt": "x",
     }
     req.update(overrides)
+    req.setdefault(
+        "model",
+        {
+            "codex": "gpt-5.6-sol",
+            "claude": "sonnet",
+            "opus": "opus",
+            "fable": "fable",
+            "opencode": "opencode/deepseek-v4-flash-free",
+            "reasonix": "deepseek-v4-flash",
+            "chatgpt_pro": "manual",
+        }[req["profile"]],
+    )
     return req
 
 
@@ -99,9 +111,13 @@ def test_advice_requires_prompt(tmp_path):
     assert result["error"] == "missing_required_field"
 
 
-def test_reasonix_review_defaults_to_flash_model(tmp_path):
+def test_reasonix_review_requires_explicit_flash_model(tmp_path):
     result = validate_start_request(
-        _base_request(profile="reasonix", operation="review"),
+        _base_request(
+            profile="reasonix",
+            operation="review",
+            model="deepseek-v4-flash",
+        ),
         state_root=tmp_path,
     )
     assert result["ok"] is True
@@ -134,7 +150,7 @@ def test_reasonix_dev_validates_with_tmux_and_edit_local(tmp_path):
 def test_flat_profile_entries_have_required_fields(tmp_path):
     """Every profile entry has the minimal provider-neutral fields."""
     details = profiles_list(client_name="codex")["profile_details"]
-    required = {"models", "default_model", "operations", "interactive"}
+    required = {"models", "operations", "interactive"}
     assert len(details) == 5  # reasonix, codex, claude, opencode, chatgpt_pro
     for name, entry in details.items():
         missing = required - set(entry.keys())
@@ -218,7 +234,6 @@ _REQUIRED_MATRIX_FIELDS = frozenset(
         "os",
         "operations",
         "interaction_modes",
-        "default_model",
         "effort_support",
         "billing_mode",
     }

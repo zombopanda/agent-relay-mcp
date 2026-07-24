@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 
-from agent_crossbar import server
+from agent_crossbar import providers, runner, server
 from agent_crossbar.profiles import list_profiles
 
 CLIENT_ARGS = {"client", "client_name", "client_version", "client_session_id"}
@@ -58,6 +58,20 @@ def test_removed_fields_are_absent_from_agent_start() -> None:
     assert fields.isdisjoint(removed)
 
 
+def test_agent_start_model_is_required() -> None:
+    parameter = inspect.signature(server.agent_start).parameters["model"]
+    assert parameter.default is inspect.Parameter.empty
+
+
+def test_runtime_launchers_never_fall_back_to_a_model() -> None:
+    runner_source = inspect.getsource(runner._candidates)
+    reasonix_source = inspect.getsource(providers._reasonix_plan)
+
+    assert 'req.get("model") or "gpt-5.6-sol"' not in runner_source
+    assert 'req.get("model") or "deepseek-v4-flash"' not in runner_source
+    assert "if model is None:" not in reasonix_source
+
+
 def test_qwen_is_not_a_public_profile() -> None:
     assert "qwen" not in list_profiles()
 
@@ -105,6 +119,7 @@ def test_minimal_agent_start_review_creates_job_without_target_fields(
         profile="reasonix",
         prompt="review the code",
         task="review",
+        model="deepseek-v4-flash",
     )
 
     assert result["ok"] is True
@@ -121,6 +136,7 @@ def test_agent_start_rejects_unknown_task_without_creating_job(tmp_path, monkeyp
         profile="codex",
         prompt="test",
         task="summarize",
+        model="gpt-5.6-sol",
     )
 
     assert result["ok"] is False
@@ -137,6 +153,7 @@ def test_repo_scope_requires_cwd_without_creating_job(tmp_path, monkeypatch) -> 
         prompt="review it",
         task="review",
         scope={"kind": "working_tree"},
+        model="gpt-5.6-sol",
     )
 
     assert result["ok"] is False
@@ -155,6 +172,7 @@ def test_interactive_request_is_rejected_when_adapter_cannot_continue(
         prompt="answer",
         task="ask",
         interactive=True,
+        model="gpt-5",
     )
 
     assert result["ok"] is False
@@ -170,6 +188,7 @@ def test_max_runtime_is_validated_before_job_creation(tmp_path, monkeypatch) -> 
         prompt="test",
         task="ask",
         max_runtime_sec=0,
+        model="gpt-5.6-sol",
     )
 
     assert result["ok"] is False
@@ -216,6 +235,7 @@ def test_agent_start_always_creates_async_job_and_returns_job_id(
         profile="codex",
         prompt="implement feature",
         task="dev",
+        model="gpt-5.6-sol",
     )
 
     assert result["ok"] is True
@@ -259,6 +279,7 @@ def test_codex_agent_start_ask_falls_back_to_text(tmp_path, monkeypatch):
         profile="codex",
         prompt="explain something",
         task="ask",
+        model="gpt-5.6-sol",
     )
 
     assert result["ok"] is True, f"codex ask failed: {result}"
@@ -299,6 +320,7 @@ def test_reasonix_interactive_true_selects_tmux_transport(tmp_path, monkeypatch)
         prompt="do thing",
         task="ask",
         interactive=True,
+        model="deepseek-v4-flash",
     )
 
     assert result["ok"] is True, f"reasonix interactive failed: {result}"
@@ -314,6 +336,7 @@ def test_claude_interactive_true_rejected_with_billing_guidance(tmp_path, monkey
         prompt="review the code",
         task="review",
         interactive=True,
+        model="sonnet",
     )
 
     assert result["ok"] is False
@@ -386,6 +409,7 @@ def test_claude_agent_start_uses_claude_bg_backend(tmp_path, monkeypatch):
         profile="claude",
         prompt="review the code",
         task="review",
+        model="sonnet",
     )
 
     assert result["ok"] is True
@@ -429,6 +453,7 @@ def test_reasonix_interactive_false_selects_print_transport(tmp_path, monkeypatc
         prompt="do thing",
         task="ask",
         interactive=False,
+        model="deepseek-v4-flash",
     )
 
     assert result["ok"] is True
@@ -466,7 +491,7 @@ def test_profiles_list_has_minimal_schema_per_entry():
     """Each profile entry must have only: aliases, models, default_model, operations, interactive."""
     from agent_crossbar.profiles import profile_registry
 
-    allowed = {"aliases", "models", "default_model", "operations", "interactive", "support_tier"}
+    allowed = {"aliases", "models", "operations", "interactive", "support_tier"}
     reg = profile_registry()
     for name, entry in reg.items():
         extra = set(entry.keys()) - allowed

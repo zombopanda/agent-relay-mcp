@@ -8,7 +8,6 @@ from typing import Any
 from agent_crossbar.models import Autonomy, Operation, Sensitivity, Transport
 from agent_crossbar.profiles import (
     CODEX_DEFAULT_EFFORT,
-    CODEX_DEFAULT_MODEL,
     CODEX_EFFORT_ALIASES,
     CODEX_EFFORTS,
     allowed_models,
@@ -54,69 +53,6 @@ def validate_start_request(
                 "job_created": False,
             }
 
-    # Resolve profile (aliases -> canonical)
-    profile_raw: str = req["profile"]
-    ok, resolved = resolve_profile(profile_raw)
-    if not ok:
-        return {
-            "ok": False,
-            "error": "invalid_profile",
-            "message": f"Unknown profile '{profile_raw}'",
-            "warnings": warnings,
-            "job_created": False,
-        }
-
-    # Validate operation
-    try:
-        Operation(req["operation"])
-    except ValueError:
-        return {
-            "ok": False,
-            "error": "invalid_operation",
-            "message": f"Unknown operation '{req['operation']}'",
-            "warnings": warnings,
-            "job_created": False,
-        }
-
-    # Validate transport
-    try:
-        Transport(req["transport"])
-    except ValueError:
-        return {
-            "ok": False,
-            "error": "invalid_transport",
-            "message": f"Unknown transport '{req['transport']}'",
-            "warnings": warnings,
-            "job_created": False,
-        }
-
-    # Validate autonomy
-    try:
-        Autonomy(req["autonomy"])
-    except ValueError:
-        return {
-            "ok": False,
-            "error": "invalid_autonomy",
-            "message": f"Unknown autonomy '{req['autonomy']}'",
-            "warnings": warnings,
-            "job_created": False,
-        }
-
-    # Validate sensitivity
-    try:
-        Sensitivity(req["sensitivity"])
-    except ValueError:
-        return {
-            "ok": False,
-            "error": "invalid_sensitivity",
-            "message": f"Unknown sensitivity '{req['sensitivity']}'",
-            "warnings": warnings,
-            "job_created": False,
-        }
-
-    transport_val = Transport(req["transport"])
-    operation_val = Operation(req["operation"])
-
     def fail(error: str, message: str) -> dict[str, Any]:
         return {
             "ok": False,
@@ -125,6 +61,46 @@ def validate_start_request(
             "warnings": warnings,
             "job_created": False,
         }
+
+    # Model is required — no default model fallback for any profile.
+    model_raw = req.get("model")
+    if model_raw is None or not str(model_raw).strip():
+        return fail("missing_model", "model is required for every agent_start invocation")
+
+    req["model"] = str(model_raw).strip()
+
+    # Resolve profile (aliases -> canonical)
+    profile_raw: str = req["profile"]
+    ok, resolved = resolve_profile(profile_raw)
+    if not ok:
+        return fail("invalid_profile", f"Unknown profile '{profile_raw}'")
+
+    # Validate operation
+    try:
+        Operation(req["operation"])
+    except ValueError:
+        return fail("invalid_operation", f"Unknown operation '{req['operation']}'")
+
+    # Validate transport
+    try:
+        Transport(req["transport"])
+    except ValueError:
+        return fail("invalid_transport", f"Unknown transport '{req['transport']}'")
+
+    # Validate autonomy
+    try:
+        Autonomy(req["autonomy"])
+    except ValueError:
+        return fail("invalid_autonomy", f"Unknown autonomy '{req['autonomy']}'")
+
+    # Validate sensitivity
+    try:
+        Sensitivity(req["sensitivity"])
+    except ValueError:
+        return fail("invalid_sensitivity", f"Unknown sensitivity '{req['sensitivity']}'")
+
+    transport_val = Transport(req["transport"])
+    operation_val = Operation(req["operation"])
 
     # Rule: operation must be supported by the profile.
     supported_ops = profile_operations(resolved)
@@ -146,45 +122,26 @@ def validate_start_request(
 
     normalized_model: str | None = None
     normalized_effort: str | None = None
+    model = req["model"]
+    models = allowed_models(resolved)
 
-    # Rule: reasonix review defaults to flash unless the caller asks for pro.
-    if resolved == "reasonix" and operation_val == Operation.REVIEW:
-        model = req.get("model") or "deepseek-v4-flash"
-        models = allowed_models(resolved)
-        if model not in models:
-            return fail(
-                "invalid_model", f"Model '{model}' is not supported for profile '{resolved}'"
-            )
-        req["model"] = model
-        normalized_model = model
-
-    if resolved == "claude":
-        models = allowed_models(resolved)
-        model = req.get("model")
-        if model is None:
-            model = profile_raw if profile_raw in models else models[0]
-        if model not in models:
-            return fail(
-                "invalid_model", f"Model '{model}' is not supported for profile '{resolved}'"
-            )
-        req["model"] = model
-        normalized_model = model
+    # Validate model against the profile's known allowlist.
+    # Profiles with no model allowlist (e.g. chatgpt_pro) skip this check —
+    # model is still required but the value is accepted as-is.
+    if resolved != "opencode" and models and model not in models:
+        return fail(
+            "invalid_model", f"Model '{model}' is not supported for profile '{resolved}'"
+        )
+    normalized_model = model
 
     if resolved == "codex":
-        model = req.get("model") or CODEX_DEFAULT_MODEL
-        if model not in allowed_models(resolved):
-            return fail(
-                "invalid_model", f"Model '{model}' is not supported for profile '{resolved}'"
-            )
         effort = req.get("effort") or CODEX_DEFAULT_EFFORT
         effort = CODEX_EFFORT_ALIASES.get(effort, effort)
         if effort not in CODEX_EFFORTS:
             return fail(
                 "invalid_effort", f"Effort '{effort}' is not supported for profile '{resolved}'"
             )
-        req["model"] = model
         req["effort"] = effort
-        normalized_model = model
         normalized_effort = effort
 
         # Rule: Codex effort must be supported by the selected model's discovered capabilities.
@@ -226,34 +183,30 @@ def validate_start_request(
         if not catalog.models:
             return fail("discovery_error", "No OpenCode models discovered")
 
-        requested = req.get("model")
-        if requested is None:
-            model = catalog.default_model
-            if model is None:
-                return fail("discovery_error", "No default OpenCode model available")
+        # Match the required model against the live catalog. OpenCode's model
+        # list is dynamic, so no static allowlist may reject it first.
+        catalog_model_ids = set(catalog.models)
+        if model in catalog_model_ids:
+            # Model already matches a catalog entry — use as-is
+            pass
         else:
-            catalog_model_ids = set(catalog.models)
-            if requested in catalog_model_ids:
-                model = requested
+            # Try suffix match: short name matches the part after
+            # the last slash in a catalog model ID.
+            matched = None
+            for cid in catalog.models:
+                if "/" in cid and cid.split("/", 1)[1] == model:
+                    matched = cid
+                    break
+            if matched is not None:
+                model = matched
+                normalized_model = model
+                req["model"] = model
             else:
-                # Try suffix match: short name matches the part after
-                # the last slash in a catalog model ID.
-                matched = None
-                for cid in catalog.models:
-                    if "/" in cid and cid.split("/", 1)[1] == requested:
-                        matched = cid
-                        break
-                if matched is not None:
-                    model = matched
-                else:
-                    return fail(
-                        "invalid_model",
-                        f"Model '{requested}' is not available in OpenCode "
-                        f"(discovered: {', '.join(catalog.models)})",
-                    )
-
-        req["model"] = model
-        normalized_model = model
+                return fail(
+                    "invalid_model",
+                    f"Model '{model}' is not available in OpenCode "
+                    f"(discovered: {', '.join(catalog.models)})",
+                )
 
         # Validate effort against per-model discovery data
         effort = req.get("effort")

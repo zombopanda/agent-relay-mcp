@@ -13,7 +13,6 @@ def build_entry() -> dict:
     return {
         "aliases": ["deepseek"],
         "models": REASONIX_MODELS,
-        "default_model": "deepseek-v4-flash",
         "operations": ["review", "text", "advice", "dev"],
         "interactive": True,
         "support_tier": SUPPORT_TIER,
@@ -28,7 +27,6 @@ def build_matrix_entry() -> dict:
         "operations": entry["operations"],
         "backend": "tmux",
         "interaction_modes": ["noninteractive", "interactive"],
-        "default_model": entry["default_model"],
         "effort_support": True,
         "billing_mode": "api",
         "job_send_supported": True,
