@@ -146,6 +146,14 @@ def test_package_readme_troubleshooting_matches_public_runtime_contract():
     assert "uvx agent-crossbar doctor --profile codex --json" in readme
 
 
+def test_package_readme_explains_reasonix_modes_without_internal_gate_jargon():
+    readme = _load_readme()
+
+    assert "| `reasonix` | ask, review, dev | both |" in readme
+    assert "live sentinel" not in readme
+    assert "ask gate" not in readme
+
+
 # --- Public branding ---
 
 

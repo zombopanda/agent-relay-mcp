@@ -269,7 +269,9 @@ def _run_adapter_job(
         # Map adapter status to envelope status
         env_status = normalized.status  # completed | failed | cancelled | waiting
 
-        # Build failure for native failed
+        # Build failure for native failures and adapter-level finalization
+        # failures (for example, a native "done" session whose final response
+        # cannot be recovered from provider logs).
         failure: dict[str, Any] | None = None
         if native_state == "failed":
             failure = {
@@ -282,10 +284,21 @@ def _run_adapter_job(
                     "native_state": native_state,
                 },
             }
+        elif normalized.status == "failed":
+            failure = {
+                "stage": normalized.error_stage or "finalization",
+                "code": normalized.stop_reason or "provider_result_invalid",
+                "retryable": True,
+                "next_action": "inspect_logs_and_retry",
+                "diagnostics": {
+                    "output": logs[-2048:] if logs else "",
+                    "native_state": native_state,
+                },
+            }
 
         envelope = build_result_envelope(
             status=env_status,
-            stop_reason=native_state,
+            stop_reason=normalized.stop_reason or native_state,
             output=normalized.output,
             created_at=created_at,
             started_at=started_at,

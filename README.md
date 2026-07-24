@@ -144,12 +144,8 @@ With the MCP server running, from any MCP client:
 
 | Profile | Tasks | Interactive | Notes |
 |---------|-------|-------------|-------|
-| `reasonix` | ask, review, dev | false or true | Experimental TUI adapter; results use heuristic parsing |
+| `reasonix` | ask, review, dev | both | Supports noninteractive and interactive modes; results use heuristic TUI parsing |
 | `chatgpt_pro` | ask, review | false | Experimental macOS GUI adapter; requires a manual signed-in ChatGPT app/browser gate |
-
-Latest local experimental evidence (2026-07-23): the default
-`deepseek-v4-flash` noninteractive ask gate received its live sentinel. This
-result is informational and does not promote Reasonix to the supported tier.
 
 ### Provider Prerequisites
 

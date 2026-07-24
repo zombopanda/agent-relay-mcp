@@ -542,6 +542,54 @@ def test_monitor_maps_done_to_completed_envelope(
     assert final["failure"] is None
 
 
+def test_monitor_maps_done_without_recoverable_output_to_failed_envelope(
+    claude_state_root: Path, monkeypatch, suppress_background_monitor
+):
+    """Native done must not become success when Claude logs contain only TUI chrome."""
+    runner = FakeRunner(
+        [
+            _auth_ok(),
+            _launch_ok("bad0feed"),
+            _agents_entry("done", "bad0feed"),
+            _logs_ok(
+                """[Screen Reader Mode: on via flag]
+$claude: Summary
+don't ask on (shift+tab to cycle) · esc to interrupt
+0 tokens
+$Worked for 2s
+"""
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_crossbar.adapters.claude.LocalSubprocessRunner.run",
+        runner.run,
+    )
+    from agent_crossbar.agent_runner import monitor_agent_job
+
+    result = agent_start(
+        profile="claude",
+        prompt="do thing",
+        task="ask",
+        interactive=False,
+        client_name="test",
+    )
+    job_id = result["job_id"]
+
+    store = JobStore(claude_state_root)
+    import agent_crossbar.adapters.registry as reg
+
+    monitor_agent_job(store, job_id, reg.get_adapter("claude"), poll_interval_sec=0.01)
+
+    final = store.get_result(job_id)
+    assert final["ok"] is False
+    assert final["status"] == "failed"
+    assert final["stop_reason"] == "result_output_unavailable"
+    assert final["failure"]["stage"] == "finalization"
+    assert final["failure"]["code"] == "result_output_unavailable"
+    assert final["failure"]["next_action"] == "inspect_logs_and_retry"
+
+
 def test_monitor_maps_failed_to_failed_with_failure_block(
     claude_state_root: Path, monkeypatch, suppress_background_monitor
 ):

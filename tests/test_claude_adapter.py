@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -346,6 +347,66 @@ $
     )
 
     assert result.output == "GPT_PRO_PROVIDER_GATE_OK"
+
+
+def test_normalize_claude_screen_reader_logs_prefers_complete_final_redraw():
+    logs = """[Screen Reader Mode: on via flag]
+$claude: Summary
+I've completed a read-only advers
+don't ask on (shift+tab to cycle)  ·  esc to interrupt
+86436 tokens
+$I've completed a read-only adversarial review of the README.
+don't ask on (shift+tab to cycle)  ·  esc to interrupt
+86436 tokens
+$
+1. Invalid model ID with ANSI escape code
+  - The opus model ID contains terminal formatting.
+2. Broken anchor link
+  - The README link does not match a heading.
+3. Misleading interactive support
+  - The table should name both supported modes.
+4. Vague language
+  - Replace internal gate jargon with user-facing wording.
+All findings are verified against the source code.
+Unravelling…   ( 2m 47s · 13.8k tokens )
+don't ask on (shift+tab to cycle)  ·  esc to interrupt
+86436 tokens
+$Worked for 2m 49s
+"""
+    result = normalize_claude_result(
+        {"id": "abc123", "state": "done"},
+        logs,
+    )
+
+    assert result.status == "completed"
+    assert result.output.startswith("1. Invalid model ID")
+    assert "4. Vague language" in result.output
+    assert "don't ask on" not in result.output
+    assert "86436 tokens" not in result.output
+
+
+def test_normalize_claude_done_with_only_tui_chrome_is_not_a_false_success():
+    result = normalize_claude_result(
+        {"id": "abc123", "state": "done"},
+        """[Screen Reader Mode: on via flag]
+$claude: Summary
+don't ask on (shift+tab to cycle) · esc to interrupt
+0 tokens
+$Worked for 2s
+""",
+    )
+
+    assert result.status == "failed"
+    assert result.stop_reason == "result_output_unavailable"
+    assert result.error == "Claude completed without a recoverable final response."
+
+
+def test_claude_static_model_ids_do_not_contain_terminal_formatting():
+    from agent_crossbar.profiles.claude import CLAUDE_MODEL_IDS
+
+    for model_id in CLAUDE_MODEL_IDS.values():
+        assert "\x1b" not in model_id
+        assert not re.search(r"\[[0-9;]*m", model_id)
 
 
 def test_normalize_claude_result_clean_error_field():

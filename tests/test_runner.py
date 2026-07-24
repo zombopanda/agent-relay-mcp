@@ -484,11 +484,11 @@ def test_run_tmux_job_resolves_claude_binary_and_opus_model_for_claude_profile(
     )
 
     assert result["ok"] is True
-    assert result["selected_candidate"] == "claude claude-opus-4-8[1m] interactive"
+    assert result["selected_candidate"] == "claude claude-opus-4-8 interactive"
     assert result["candidate_argv"][:3] == [
         "/tmp/current-claude",
         "--model",
-        "claude-opus-4-8[1m]",
+        "claude-opus-4-8",
     ]
     assert "-p" not in result["candidate_argv"]
     assert "--print" not in result["candidate_argv"]

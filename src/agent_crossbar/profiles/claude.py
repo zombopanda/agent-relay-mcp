@@ -7,7 +7,7 @@ from __future__ import annotations
 SUPPORT_TIER = "supported"
 
 CLAUDE_MODEL_IDS = {
-    "opus": "claude-opus-4-8[1m]",
+    "opus": "claude-opus-4-8",
     "fable": "claude-fable-5",
     "sonnet": "claude-sonnet-4-5",
     "haiku": "claude-haiku-4-5",

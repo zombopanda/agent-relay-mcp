@@ -27,6 +27,18 @@ _CLAUDE_HELP_EFFORT_RE = re.compile(
     r"--effort\s+\S+\s+.*?\(([^)]+)\)",
     re.IGNORECASE | re.DOTALL,
 )
+_SCREEN_READER_UI_LINE_RE = re.compile(
+    r"^(?:"
+    r".*?\besc to interrupt\b.*|"
+    r".*?\bshift\+tab to cycle\b.*|"
+    r"[\d,]+\s+tokens\b.*|"
+    r"effort:\s.*|"
+    r"plan mode on\b.*|"
+    r".*…\s+\(\s*\d.*\)|"
+    r"Worked for\b.*"
+    r")$",
+    re.IGNORECASE,
+)
 
 
 def parse_claude_help_efforts(help_output: str) -> tuple[str, ...]:
@@ -219,6 +231,44 @@ def map_claude_effort(effort: str) -> str:
     return normalize_effort(effort, CLAUDE_EFFORT_MAP)
 
 
+def _screen_reader_final_response(clean_logs: str) -> str:
+    """Recover the most complete final-response redraw from Claude TUI logs."""
+    assistant_markers = list(re.finditer(r"(?m)^\$?claude:\s*", clean_logs))
+    if not assistant_markers:
+        return ""
+
+    candidate = clean_logs[assistant_markers[-1].end() :]
+    segments: list[list[str]] = []
+    current: list[str] = []
+
+    def finish_segment() -> None:
+        nonlocal current
+        while current and not current[-1].strip():
+            current.pop()
+        if current:
+            segments.append(current)
+        current = []
+
+    for raw_line in candidate.splitlines():
+        line = raw_line.strip()
+        if line.startswith("$"):
+            line = line[1:].lstrip()
+        if not line:
+            continue
+        if _SCREEN_READER_UI_LINE_RE.match(line):
+            finish_segment()
+            continue
+        current.append(line)
+    finish_segment()
+
+    meaningful = [
+        "\n".join(lines).strip()
+        for lines in segments
+        if any(line.casefold() != "summary" for line in lines)
+    ]
+    return max(meaningful, key=len, default="")
+
+
 def build_claude_launch(
     *,
     model: str | None = None,
@@ -300,22 +350,18 @@ def normalize_claude_result(entry: dict[str, Any], logs: str) -> NormalizedResul
     short_id = str(entry.get("id") or entry.get("session_id") or "")
     clean = normalize_tmux_output(logs)
     if "[Screen Reader Mode:" in clean:
-        assistant_markers = list(re.finditer(r"(?m)^\$claude:\s*", clean))
-        if assistant_markers:
-            candidate = clean[assistant_markers[-1].end() :]
-            candidate = re.split(
-                r"(?m)^(?:"
-                r".*…\s+\(\s*\d+s.*\)|"
-                r"plan mode on\b.*|"
-                r"[\d,]+\s+tokens\b.*|"
-                r"effort:\s.*|"
-                r"Cogitated for\b.*|"
-                r"\$\s*"
-                r")$",
-                candidate,
-                maxsplit=1,
-            )[0]
-            clean = candidate.strip()
+        clean = _screen_reader_final_response(clean)
+        if native_state == "done" and not clean:
+            message = "Claude completed without a recoverable final response."
+            return NormalizedResult(
+                status="failed",
+                stop_reason="result_output_unavailable",
+                output=message,
+                session_id=short_id,
+                error=message,
+                error_stage="finalization",
+                waiting_for=entry.get("waiting_for"),
+            )
     return NormalizedResult(
         status=status,
         stop_reason=native_state or "unknown_state",
