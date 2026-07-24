@@ -419,9 +419,7 @@ def test_parse_args_strips_leading_double_dash():
     """A leading '--' from pnpm/npm pass-through must be stripped before
     argparse parsing, so that _parse_args(['--', '--profile', 'codex', '--task', 'dev'])
     produces the same result as _parse_args(['--profile', 'codex', '--task', 'dev'])."""
-    normal = gate._parse_args(
-        ["--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"]
-    )
+    normal = gate._parse_args(["--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"])
     npm_style = gate._parse_args(
         ["--", "--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"]
     )
@@ -437,9 +435,7 @@ def test_parse_args_handles_npm_double_dash_with_help():
 
 def test_parse_args_without_double_dash_remains_unchanged():
     """argv that does not start with '--' is passed through as-is."""
-    normal = gate._parse_args(
-        ["--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"]
-    )
+    normal = gate._parse_args(["--profile", "codex", "--model", "gpt-5.6-sol", "--task", "dev"])
     assert normal.profile == ["codex"]
     assert normal.task == ["dev"]
 

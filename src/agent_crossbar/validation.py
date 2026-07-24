@@ -129,9 +129,7 @@ def validate_start_request(
     # Profiles with no model allowlist (e.g. chatgpt_pro) skip this check —
     # model is still required but the value is accepted as-is.
     if resolved != "opencode" and models and model not in models:
-        return fail(
-            "invalid_model", f"Model '{model}' is not supported for profile '{resolved}'"
-        )
+        return fail("invalid_model", f"Model '{model}' is not supported for profile '{resolved}'")
     normalized_model = model
 
     if resolved == "codex":

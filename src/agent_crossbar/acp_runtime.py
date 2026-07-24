@@ -136,6 +136,7 @@ async def run_acp_job(
 
     # -- run -----------------------------------------------------------------------
     try:
+
         def _record_acp_pid(pid: int) -> None:
             current = store._read_job_meta(job.path)
             store.update_job_meta(job_id, {**current, "acp_pid": pid})
