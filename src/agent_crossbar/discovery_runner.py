@@ -11,6 +11,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from . import __version__
+
 
 @dataclass(frozen=True)
 class DiscoveryRun:
@@ -196,7 +198,7 @@ def discover_codex_models(
             "initialize",
             next_request_id,
             {
-                "clientInfo": {"name": "agent-crossbar", "version": "0.1.0"},
+                "clientInfo": {"name": "agent-crossbar", "version": __version__},
                 "capabilities": {},
             },
         )
