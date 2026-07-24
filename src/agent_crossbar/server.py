@@ -20,7 +20,11 @@ from agent_crossbar.acp_runtime import run_acp_job as _run_acp_job
 from agent_crossbar.adapters.claude import LocalSubprocessRunner
 from agent_crossbar.adapters.registry import get_adapter
 from agent_crossbar.agent_runner import start_agent_job
-from agent_crossbar.discovery import cached_profile_health_entry, live_profile_registry
+from agent_crossbar.discovery import (
+    EFFORT_LEGEND,
+    cached_profile_health_entry,
+    live_profile_registry,
+)
 from agent_crossbar.env_compat import getenv
 from agent_crossbar.envelope import build_result_envelope, sanitize_diagnostic_text
 from agent_crossbar.jobs import JobStore
@@ -904,7 +908,7 @@ def profile_health(
                     "error": sanitize_diagnostic_text(f"model discovery lookup crashed: {exc}"),
                 }
             profiles.append(entry)
-        return {"ok": True, "profiles": profiles}
+        return {"ok": True, "effort_legend": EFFORT_LEGEND, "profiles": profiles}
 
     return _run_logged_tool(
         "profile_health",

@@ -45,7 +45,7 @@ def _load_readme():
 def test_package_json_matches_pyproject_version():
     pkg = _load_package_json()
     py = _load_pyproject()
-    assert pkg["version"] == py["project"]["version"] == "0.2.0"
+    assert pkg["version"] == py["project"]["version"] == "0.3.0"
 
 
 def test_package_json_npm_name():

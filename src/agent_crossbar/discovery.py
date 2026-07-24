@@ -15,6 +15,81 @@ from .discovery_runner import DiscoveryProcess, DiscoveryRun
 from .envelope import sanitize_diagnostic_text
 from .model_cache import CACHE_TTL_SECONDS, cache_get_or_fetch, read_cache_any
 
+# Effort-level names repeat once per model in ``model_info`` — with catalogs
+# running into the hundreds of models, spelling them out inflates
+# ``profile_health`` for no benefit over a small int code. Callers resolve
+# codes back to names via the ``EFFORT_LEGEND`` included in the response.
+EFFORT_CODES: dict[str, int] = {
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "max": 4,
+    "xhigh": 5,
+    "ultra": 6,
+}
+EFFORT_LEGEND: dict[str, str] = {str(code): name for name, code in EFFORT_CODES.items()}
+
+
+def _encode_efforts(efforts: Any) -> list[int | str]:
+    return [EFFORT_CODES.get(e, e) for e in efforts]
+
+
+def _compact_model_info(model_info: Any) -> list[dict[str, Any]]:
+    """Encode model-info entries with effort names replaced by legend codes.
+
+    Accepts either ``ModelInfo`` objects (from a live ``ModelCatalog``) or
+    raw cache dicts (``{"id", "supported_efforts", "default_effort"}``).
+    ``e`` is omitted entirely when a model has no effort variants — the
+    common case for a catalog with hundreds of chat-only models.
+    """
+    compact = []
+    for mi in model_info:
+        if isinstance(mi, ModelInfo):
+            model_id, efforts, default = mi.id, mi.supported_efforts, mi.default_effort
+        else:
+            model_id = mi["id"]
+            efforts = mi.get("supported_efforts", [])
+            default = mi.get("default_effort")
+        entry: dict[str, Any] = {"id": model_id}
+        if efforts:
+            entry["e"] = _encode_efforts(efforts)
+        if default is not None:
+            entry["d"] = EFFORT_CODES.get(default, default)
+        compact.append(entry)
+    return compact
+
+
+def _compact_model_info_with_fallback(model_info: Any, model_ids: Any) -> list[dict[str, Any]]:
+    """``_compact_model_info`` with a fallback to bare ``{"id": ...}`` entries.
+
+    Some cache records (older entries, or a catalog fetch that populated
+    ``models`` but not per-model effort metadata) carry a populated
+    ``models``/``catalog.models`` list alongside an empty ``model_info``.
+    Without this fallback those model ids would silently vanish from
+    ``profile_health`` instead of surfacing (effort-less, but present).
+    """
+    compact = _compact_model_info(model_info)
+    if not compact and model_ids:
+        compact = [{"id": model_id} for model_id in model_ids]
+    return compact
+
+
+def _group_model_info_by_provider(compact: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Group compact model-info entries by their ``provider/`` id prefix.
+
+    Ids without a ``/`` (e.g. plain ``claude``/``codex`` model names) are
+    grouped under the empty-string key. Grouping removes the repeated
+    provider prefix (``opencode-go/``, ``google-vertex/``, ...) from every
+    model id, which otherwise repeats hundreds of times in a large catalog.
+    """
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for entry in compact:
+        provider, sep, suffix = entry["id"].partition("/")
+        item = dict(entry)
+        item["id"] = suffix if sep else provider
+        groups.setdefault(provider if sep else "", []).append(item)
+    return groups
+
 
 class _DiscoveryDiagnostics:
     """Thread-safe bounded store of the last sanitized live-discovery failure per profile.
@@ -235,17 +310,11 @@ def build_profile_health_entry(
             "status": "registered",
             "runtime_checked": True,
             "discovery_available": True,
-            "models": list(catalog.models),
             "default_model": catalog.default_model,
             "native_efforts": list(catalog.native_efforts),
-            "model_info": [
-                {
-                    "id": mi.id,
-                    "supported_efforts": list(mi.supported_efforts),
-                    "default_effort": mi.default_effort,
-                }
-                for mi in catalog.model_info
-            ],
+            "model_info": _group_model_info_by_provider(
+                _compact_model_info_with_fallback(catalog.model_info, catalog.models)
+            ),
             "source": catalog.source,
             "cli_version": catalog.cli_version,
             "fetched_at": catalog.fetched_at,
@@ -379,10 +448,9 @@ def cached_profile_health_entry(state_root: Path, profile: str) -> dict[str, Any
             "status": "registered",
             "runtime_checked": False,
             "discovery_available": True,
-            "models": [],
             "default_model": None,
             "native_efforts": [],
-            "model_info": [],
+            "model_info": {},
             "source": None,
             "cli_version": version,
             "fetched_at": None,
@@ -402,10 +470,11 @@ def cached_profile_health_entry(state_root: Path, profile: str) -> dict[str, Any
         "status": "registered",
         "runtime_checked": True,
         "discovery_available": True,
-        "models": list(data.get("models", [])),
         "default_model": data.get("default_model"),
         "native_efforts": list(data.get("native_efforts", [])),
-        "model_info": data.get("model_info", []),
+        "model_info": _group_model_info_by_provider(
+            _compact_model_info_with_fallback(data.get("model_info", []), data.get("models", []))
+        ),
         "source": envelope.get("source", data.get("source")),
         "cli_version": version,
         "fetched_at": fetched_at,

@@ -19,9 +19,13 @@ from agent_crossbar.adapters.codex import (
 from agent_crossbar.adapters.opencode import OpencodeAdapter, parse_models_output
 from agent_crossbar.discovery import (
     _PROFILES_WITH_DISCOVERY,
+    EFFORT_LEGEND,
     _catalog_to_dict,
+    _compact_model_info,
+    _compact_model_info_with_fallback,
     _dict_to_catalog,
     _get_cli_version,
+    _group_model_info_by_provider,
     build_profile_health_entry,
     cached_models_for_listing,
     cached_profile_health_entry,
@@ -301,7 +305,10 @@ def test_opencode_discover_models_handles_error() -> None:
 
 def test_opencode_verbose_parser_prefers_qualified_default_when_not_first() -> None:
     from agent_crossbar.adapters.opencode import parse_opencode_verbose_output
-    OPENCODE_DEFAULT_MODEL = "opencode/deepseek-v4-flash-free"  # moved internal, define inline for tests
+
+    OPENCODE_DEFAULT_MODEL = (
+        "opencode/deepseek-v4-flash-free"  # moved internal, define inline for tests
+    )
 
     qualified_default = OPENCODE_DEFAULT_MODEL
     output = (
@@ -349,7 +356,9 @@ def test_opencode_verbose_parser_falls_back_deterministically_when_qualified_def
 def test_opencode_nonverbose_fallback_prefers_qualified_default_when_not_first() -> None:
     """The non-verbose ``opencode models`` fallback path must apply the same
     qualified-default preference as the verbose parser."""
-    OPENCODE_DEFAULT_MODEL = "opencode/deepseek-v4-flash-free"  # moved internal, define inline for tests
+    OPENCODE_DEFAULT_MODEL = (
+        "opencode/deepseek-v4-flash-free"  # moved internal, define inline for tests
+    )
 
     qualified_default = OPENCODE_DEFAULT_MODEL
     runner = FakeDiscoveryProcess(
@@ -536,12 +545,14 @@ def test_profile_health_codex_live_shape(tmp_path: Path) -> None:
         assert entry["name"] == "codex"
         assert entry["runtime_checked"] is True
         assert entry["discovery_available"] is True
-        assert entry["models"] == ["gpt-5.6-sol", "gpt-5.6-terra"]
         assert entry["default_model"] == "gpt-5.6-sol"
         assert entry["native_efforts"] == ["low", "medium", "high", "xhigh"]
-        assert len(entry["model_info"]) == 2
-        assert entry["model_info"][0]["id"] == "gpt-5.6-sol"
-        assert entry["model_info"][0]["supported_efforts"] == ["low", "medium", "high", "xhigh"]
+        # plain (no "/") ids group under the "" provider key
+        assert list(entry["model_info"].keys()) == [""]
+        assert len(entry["model_info"][""]) == 2
+        assert entry["model_info"][""][0]["id"] == "gpt-5.6-sol"
+        assert entry["model_info"][""][0]["e"] == [1, 2, 3, 5]  # low, medium, high, xhigh
+        assert entry["model_info"][""][0]["d"] == 2  # medium
         assert entry["stale"] is False  # fresh TTL-valid cache
         assert entry["cache_hit"] is True
         assert entry["source"] == "codex app-server model/list"  # preserves provider source
@@ -588,15 +599,10 @@ def test_profile_health_claude_live_shape(tmp_path: Path) -> None:
         assert entry["name"] == "claude"
         assert entry["runtime_checked"] is True
         assert entry["discovery_available"] is True
-        assert entry["models"] == [
-            "claude-opus-4-8",
-            "claude-sonnet-5",
-            "claude-fable-5",
-            "claude-haiku-4-5",
-        ]
         assert entry["default_model"] == "claude-opus-4-8"
         assert entry["native_efforts"] == ["low", "medium", "high"]
-        assert len(entry["model_info"]) == 4
+        assert list(entry["model_info"].keys()) == [""]
+        assert len(entry["model_info"][""]) == 4
         assert entry["source"] == "claude interactive /model picker"
         assert entry["stale"] is False
         assert entry["cache_hit"] is True
@@ -631,7 +637,10 @@ def test_profile_health_opencode_live_shape(tmp_path: Path, monkeypatch) -> None
         "models": ["opencode-go/glm-5.2", "opencode-go/kimi-k2.7-code"],
         "default_model": "opencode-go/glm-5.2",
         "native_efforts": [],
-        "model_info": [],
+        "model_info": [
+            {"id": "opencode-go/glm-5.2", "supported_efforts": [], "default_effort": None},
+            {"id": "opencode-go/kimi-k2.7-code", "supported_efforts": [], "default_effort": None},
+        ],
         "source": "opencode models",
     }
     write_cache(tmp_path, "opencode", "1.18.4", data)
@@ -642,10 +651,96 @@ def test_profile_health_opencode_live_shape(tmp_path: Path, monkeypatch) -> None
     assert entry["name"] == "opencode"
     assert entry["runtime_checked"] is True
     assert entry["discovery_available"] is True
-    assert entry["models"] == ["opencode-go/glm-5.2", "opencode-go/kimi-k2.7-code"]
+    # "opencode-go/" prefix groups the ids and is stripped from each entry
+    assert list(entry["model_info"].keys()) == ["opencode-go"]
+    assert entry["model_info"]["opencode-go"] == [{"id": "glm-5.2"}, {"id": "kimi-k2.7-code"}]
     assert entry["stale"] is False  # fresh TTL-valid cache
     assert entry["cache_hit"] is True
     assert entry["source"] == "opencode models"
+
+
+def test_compact_model_info_encodes_efforts_as_legend_codes() -> None:
+    """model_info entries drop spelled-out effort names in favor of small
+    int codes resolvable via EFFORT_LEGEND — this is what keeps
+    profile_health from ballooning to tens of KB per catalog with
+    hundreds of models."""
+    raw = [
+        {"id": "model-a", "supported_efforts": ["low", "high", "max"], "default_effort": "high"},
+        {"id": "model-b", "supported_efforts": [], "default_effort": None},
+    ]
+
+    compact = _compact_model_info(raw)
+
+    assert compact == [
+        {"id": "model-a", "e": [1, 3, 4], "d": 3},
+        {"id": "model-b"},
+    ]
+    # every code used above resolves back to its name via the legend
+    assert EFFORT_LEGEND["1"] == "low"
+    assert EFFORT_LEGEND["3"] == "high"
+    assert EFFORT_LEGEND["4"] == "max"
+    # a model with no effort variants gets neither "e" nor "d" at all
+    assert "e" not in compact[1]
+    assert "d" not in compact[1]
+
+
+def test_compact_model_info_accepts_modelinfo_objects() -> None:
+    """The same encoder must handle live ModelInfo objects from a fresh
+    ModelCatalog, not just raw cache dicts."""
+    mi = ModelInfo(id="model-a", supported_efforts=("medium", "ultra"), default_effort="medium")
+
+    compact = _compact_model_info([mi])
+
+    assert compact == [{"id": "model-a", "e": [2, 6], "d": 2}]
+
+
+def test_group_model_info_by_provider_strips_shared_prefix() -> None:
+    """Ids sharing a ``provider/`` prefix (repeated hundreds of times in a
+    large catalog like opencode's) are grouped and the prefix is dropped
+    from each entry; plain ids without a ``/`` land under the "" group."""
+    compact = [
+        {"id": "opencode-go/deepseek-v4-flash", "e": [3, 4]},
+        {"id": "opencode-go/glm-5.1"},
+        {"id": "google-vertex/gemini-3.5-flash"},
+        {"id": "haiku"},
+    ]
+
+    grouped = _group_model_info_by_provider(compact)
+
+    assert grouped == {
+        "opencode-go": [
+            {"id": "deepseek-v4-flash", "e": [3, 4]},
+            {"id": "glm-5.1"},
+        ],
+        "google-vertex": [{"id": "gemini-3.5-flash"}],
+        "": [{"id": "haiku"}],
+    }
+
+
+def test_compact_model_info_with_fallback_recovers_ids_when_model_info_empty() -> None:
+    """A cache record with a populated ``models`` list but empty/missing
+    ``model_info`` (older entry, or a fetch that didn't capture per-model
+    effort metadata) must not silently lose its model ids — it falls back
+    to bare ``{"id": ...}`` entries instead of vanishing from profile_health."""
+    compact = _compact_model_info_with_fallback([], ["opencode-go/glm-5.1", "opencode-go/kimi-k3"])
+
+    assert compact == [{"id": "opencode-go/glm-5.1"}, {"id": "opencode-go/kimi-k3"}]
+
+
+def test_compact_model_info_with_fallback_prefers_real_model_info() -> None:
+    """When model_info is actually populated, the fallback must not kick in
+    and override it with id-only entries."""
+    raw = [{"id": "model-a", "supported_efforts": ["high"], "default_effort": "high"}]
+
+    compact = _compact_model_info_with_fallback(raw, ["model-a"])
+
+    assert compact == [{"id": "model-a", "e": [3], "d": 3}]
+
+
+def test_compact_model_info_with_fallback_stays_empty_when_no_ids_at_all() -> None:
+    """No model_info and no models list at all → still an empty list, not a
+    spurious entry."""
+    assert _compact_model_info_with_fallback([], []) == []
 
 
 # ── Model discovery provenance tests ────────────────────────────────────────
@@ -2594,7 +2689,7 @@ def test_cached_profile_health_entry_no_cache_is_honest_not_empty_silently(tmp_p
     """No cache yet → discovery_available True, empty models, explicit error explaining why."""
     entry = cached_profile_health_entry(tmp_path, "codex")
     assert entry["discovery_available"] is True
-    assert entry["models"] == []
+    assert entry["model_info"] == {}
     assert entry["cache_hit"] is False
     assert entry["error"] is not None
 
@@ -2608,6 +2703,7 @@ def test_cached_profile_health_entry_uses_any_cache_even_stale(tmp_path: Path) -
         {
             "models": ["gpt-old-1"],
             "default_model": "gpt-old-1",
+            "model_info": [{"id": "gpt-old-1", "supported_efforts": [], "default_effort": None}],
             "source": "codex app-server model/list",
         },
     )
@@ -2622,7 +2718,7 @@ def test_cached_profile_health_entry_uses_any_cache_even_stale(tmp_path: Path) -
     entry = cached_profile_health_entry(tmp_path, "codex")
     assert entry["cache_hit"] is True
     assert entry["stale"] is True
-    assert entry["models"] == ["gpt-old-1"]
+    assert entry["model_info"] == {"": [{"id": "gpt-old-1"}]}
 
 
 def test_cached_profile_health_entry_never_spawns_subprocess_for_discovery(tmp_path: Path) -> None:
@@ -2743,7 +2839,7 @@ def test_cached_profile_health_entry_surfaces_last_discovery_diagnostic(
 
     entry = cached_profile_health_entry(tmp_path, "codex")
     assert entry["discovery_available"] is True
-    assert entry["models"] == []
+    assert entry["model_info"] == {}
     assert entry["cache_hit"] is False
     assert "connection refused" in entry["error"]
 
@@ -2786,6 +2882,7 @@ def test_cached_profile_health_entry_prefers_newer_diagnostic_over_stale_cache_e
         {
             "models": ["gpt-good-1"],
             "default_model": "gpt-good-1",
+            "model_info": [{"id": "gpt-good-1", "supported_efforts": [], "default_effort": None}],
             "source": "codex app-server model/list",
         },
     )
@@ -2794,7 +2891,7 @@ def test_cached_profile_health_entry_prefers_newer_diagnostic_over_stale_cache_e
     entry = cached_profile_health_entry(tmp_path, "codex")
 
     assert entry["cache_hit"] is True
-    assert entry["models"] == ["gpt-good-1"]
+    assert entry["model_info"] == {"": [{"id": "gpt-good-1"}]}
     assert entry["stale"] is True
     assert "connection refused" in entry["error"]
 

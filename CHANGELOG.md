@@ -2,7 +2,18 @@
 
 All notable changes to Agent Crossbar.
 
-## [0.2.0] — Unreleased
+## [0.3.0] — 2026-07-24
+
+### Changed
+- `profile_health` model discovery output is dramatically more compact for
+  large catalogs: effort names are replaced with small int codes resolved via
+  a top-level `effort_legend`, the redundant flat `models[]` list is dropped
+  in favor of `model_info` alone, and `model_info` entries are grouped by
+  their `provider/` id prefix (stripped from each entry). A catalog with
+  hundreds of models (e.g. `opencode`) now serializes at roughly a tenth of
+  its previous size with no loss of information needed to select a model.
+
+## [0.2.0] — 2026-07-23
 
 ### Added
 - Public product identity: `agent-crossbar` (repo, PyPI, npm, CLI).
