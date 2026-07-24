@@ -178,4 +178,6 @@ def test_install_smoke_uses_an_isolated_virtual_environment():
 def test_gitleaks_action_has_required_token_and_no_ignored_inputs():
     workflow = (ROOT / ".github" / "workflows" / "security.yml").read_text()
     assert "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}" in workflow
+    secret_scan = workflow.split("# ── Dependency audit", maxsplit=1)[0]
+    assert "fetch-depth: 0" in secret_scan
     assert "config-path:" not in workflow
